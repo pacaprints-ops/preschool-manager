@@ -17,6 +17,19 @@ export default function TermsClient({ terms, sessions }: { terms: Term[]; sessio
   )
   const [termForm, setTermForm] = useState({ name: '', academicYear: '', startDate: '', endDate: '', weekCount: '' })
 
+  function calcWeeks(start: string, end: string): string {
+    if (!start || !end) return ''
+    const diff = new Date(end).getTime() - new Date(start).getTime()
+    if (diff <= 0) return ''
+    return String(Math.round(diff / (7 * 24 * 60 * 60 * 1000)))
+  }
+
+  function handleDateChange(field: 'startDate' | 'endDate', value: string) {
+    const next = { ...termForm, [field]: value }
+    next.weekCount = calcWeeks(next.startDate, next.endDate)
+    setTermForm(next)
+  }
+
   async function handleAddTerm() {
     if (!termForm.name || !termForm.startDate || !termForm.endDate || !termForm.weekCount) return
     setSaving(true)
@@ -125,15 +138,15 @@ export default function TermsClient({ terms, sessions }: { terms: Term[]; sessio
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs text-gray-600 mb-1">Start date *</label>
-                <input type="date" value={termForm.startDate} onChange={e => setTermForm(f => ({ ...f, startDate: e.target.value }))} className={input} />
+                <input type="date" value={termForm.startDate} onChange={e => handleDateChange('startDate', e.target.value)} className={input} />
               </div>
               <div>
                 <label className="block text-xs text-gray-600 mb-1">End date *</label>
-                <input type="date" value={termForm.endDate} onChange={e => setTermForm(f => ({ ...f, endDate: e.target.value }))} className={input} />
+                <input type="date" value={termForm.endDate} onChange={e => handleDateChange('endDate', e.target.value)} className={input} />
               </div>
               <div>
                 <label className="block text-xs text-gray-600 mb-1">Weeks *</label>
-                <input type="number" value={termForm.weekCount} onChange={e => setTermForm(f => ({ ...f, weekCount: e.target.value }))} placeholder="12" className={input} />
+                <input type="number" value={termForm.weekCount} onChange={e => setTermForm(f => ({ ...f, weekCount: e.target.value }))} placeholder="auto" className={input} />
               </div>
             </div>
             <button onClick={handleAddTerm} disabled={saving} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm rounded-lg disabled:opacity-50">

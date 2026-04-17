@@ -16,9 +16,16 @@ import AccidentsSection from './AccidentsSection'
 import SicknessSection from './SicknessSection'
 import SiblingsSection from './SiblingsSection'
 
-export default async function ChildProfilePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ChildProfilePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ edit?: string }>
+}) {
   const session = await auth()
   const { id } = await params
+  const { edit } = await searchParams
 
   const [child] = await db.select().from(children).where(eq(children.id, id)).limit(1)
   if (!child) notFound()
@@ -124,6 +131,12 @@ export default async function ChildProfilePage({ params }: { params: Promise<{ i
             DOB: {new Date(child.dateOfBirth + 'T12:00:00').toLocaleDateString('en-GB')}
           </p>
         </div>
+        <Link
+          href={`/children/${id}?edit=1`}
+          className="px-4 py-2 text-sm font-medium text-amber-700 border border-amber-300 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors"
+        >
+          Edit child info
+        </Link>
       </div>
 
       <div className="space-y-4">
@@ -136,7 +149,7 @@ export default async function ChildProfilePage({ params }: { params: Promise<{ i
           yearAbsences={yearAbsences}
           yearTotal={yearTotal}
         />
-        <ChildInfoSection child={child} staff={allStaff} />
+        <ChildInfoSection child={child} staff={allStaff} defaultEditing={edit === '1'} />
         <SiblingsSection childId={id} siblings={siblings} allChildren={allChildren} />
         <SessionsSection childId={id} sessions={childSessionsData} />
         <ContactsSection childId={id} contacts={contacts} />

@@ -22,12 +22,13 @@ type Child = {
 const input = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400'
 
 export default function ChildInfoSection({
-  child, staff,
+  child, staff, defaultEditing = false,
 }: {
   child: Child
   staff: { id: string; name: string }[]
+  defaultEditing?: boolean
 }) {
-  const [editing, setEditing] = useState(false)
+  const [editing, setEditing] = useState(defaultEditing)
   const [saving, setSaving] = useState(false)
   const [data, setData] = useState(child)
 

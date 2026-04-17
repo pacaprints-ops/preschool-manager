@@ -2,13 +2,30 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createChild } from '../actions'
+import { createChild, updateChildSessions } from '../actions'
 import Link from 'next/link'
 
+const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const
+const SESSIONS = ['morning', 'afternoon', 'full_day'] as const
+const DAY_LABELS: Record<string, string> = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri' }
+const SESSION_LABELS: Record<string, string> = { morning: 'AM', afternoon: 'PM', full_day: 'All Day' }
+
 export default function NewChildForm({ staff }: { staff: { id: string; name: string }[] }) {
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [hasAllergies, setHasAllergies] = useState(false)
   const [isFunded, setIsFunded] = useState(false)
+  const [selectedSessions, setSelectedSessions] = useState<Set<string>>(new Set())
+
+  function toggleSession(day: string, session: string) {
+    const key = `${day}-${session}`
+    setSelectedSessions(s => {
+      const next = new Set(s)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -29,6 +46,15 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
       collectionPassword: form.get('collectionPassword') as string,
       photoConsent: form.get('photoConsent') === 'on',
     })
+
+    if (selectedSessions.size > 0) {
+      const sessions = Array.from(selectedSessions).map(key => {
+        const [day, ...rest] = key.split('-')
+        return { day, sessionType: rest.join('-') }
+      })
+      await updateChildSessions(result.id, sessions)
+    }
+
     router.push(`/children/${result.id}`)
   }
 
@@ -69,6 +95,42 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
         <input name="collectionPassword" className={input} placeholder="Word set by parent for collection verification" />
       </div>
 
+      {/* Sessions */}
+      <div className="border-t border-gray-100 pt-4">
+        <label className="block text-sm font-medium text-gray-700 mb-3">Sessions attending</label>
+        <table className="text-sm border-collapse">
+          <thead>
+            <tr>
+              <th className="w-16"></th>
+              {SESSIONS.map(s => (
+                <th key={s} className="px-4 py-1 text-gray-600 font-medium text-center">{SESSION_LABELS[s]}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {DAYS.map(day => (
+              <tr key={day}>
+                <td className="py-1.5 pr-3 text-gray-700 font-medium">{DAY_LABELS[day]}</td>
+                {SESSIONS.map(session => {
+                  const key = `${day}-${session}`
+                  return (
+                    <td key={session} className="px-4 py-1.5 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedSessions.has(key)}
+                        onChange={() => toggleSession(day, session)}
+                        className="rounded w-4 h-4 accent-amber-500"
+                      />
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Funded hours */}
       <div className="border-t border-gray-100 pt-4 space-y-3">
         <div className="flex items-center gap-3">
           <input type="checkbox" id="isFunded" checked={isFunded} onChange={e => setIsFunded(e.target.checked)} className="rounded" />
@@ -82,6 +144,7 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
         )}
       </div>
 
+      {/* Allergies */}
       <div className="border-t border-gray-100 pt-4 space-y-3">
         <div className="flex items-center gap-3">
           <input type="checkbox" id="hasAllergies" checked={hasAllergies} onChange={e => setHasAllergies(e.target.checked)} className="rounded" />
