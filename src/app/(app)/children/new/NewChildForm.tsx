@@ -16,6 +16,7 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [hasAllergies, setHasAllergies] = useState(false)
+  const [consumableConsent, setConsumableConsent] = useState(false)
   const [sessions, setSessions] = useState<Record<string, SessionStatus>>({})
 
   function toggle(day: string, session: string) {
@@ -48,6 +49,7 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
       medicalNotes: form.get('medicalNotes') as string,
       collectionPassword: form.get('collectionPassword') as string,
       photoConsent: form.get('photoConsent') === 'on',
+      consumableConsent,
     })
 
     if (Object.keys(sessions).length > 0) {
@@ -172,6 +174,24 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
       <div className="flex items-center gap-3">
         <input type="checkbox" id="photoConsent" name="photoConsent" className="rounded" />
         <label htmlFor="photoConsent" className="text-sm font-medium text-gray-700">Photo / media consent given</label>
+      </div>
+
+      <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+        <input
+          type="checkbox"
+          id="consumableConsent"
+          checked={consumableConsent}
+          onChange={e => setConsumableConsent(e.target.checked)}
+          className="rounded mt-0.5"
+        />
+        <div>
+          <label htmlFor="consumableConsent" className="text-sm font-medium text-gray-700">
+            Voluntary consumable fee agreement
+          </label>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Parent/guardian agrees to the £3.50 per session consumable charge for each day attending.
+          </p>
+        </div>
       </div>
 
       <div className="flex gap-3 pt-2 border-t border-gray-100">

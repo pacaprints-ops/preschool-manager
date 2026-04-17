@@ -15,6 +15,7 @@ type Child = {
   medicalNotes: string | null
   collectionPassword: string | null
   photoConsent: boolean
+  consumableConsent: boolean
 }
 
 const input = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400'
@@ -43,6 +44,7 @@ export default function ChildInfoSection({
       medicalNotes: data.medicalNotes ?? '',
       collectionPassword: data.collectionPassword ?? '',
       photoConsent: data.photoConsent,
+      consumableConsent: data.consumableConsent,
     })
     setSaving(false)
     setEditing(false)
@@ -81,6 +83,14 @@ export default function ChildInfoSection({
           <div><dt className="text-gray-500">Allergies</dt><dd className="text-gray-900">{data.hasAllergies ? (data.allergies || 'Yes (no detail)') : 'None'}</dd></div>
           <div><dt className="text-gray-500">Medical notes</dt><dd className="text-gray-900">{data.medicalNotes || '—'}</dd></div>
           <div><dt className="text-gray-500">Photo consent</dt><dd className="text-gray-900">{data.photoConsent ? 'Yes' : 'No'}</dd></div>
+          <div>
+            <dt className="text-gray-500">Consumable fee consent</dt>
+            <dd>
+              {data.consumableConsent
+                ? <span className="text-green-700 font-medium">Agreed — £3.50/session</span>
+                : <span className="text-gray-400">Not agreed</span>}
+            </dd>
+          </div>
         </dl>
       ) : (
         <div className="space-y-4">
@@ -132,6 +142,13 @@ export default function ChildInfoSection({
           <div className="flex items-center gap-3">
             <input type="checkbox" id="photoConsent" checked={data.photoConsent} onChange={e => setData(d => ({ ...d, photoConsent: e.target.checked }))} className="rounded" />
             <label htmlFor="photoConsent" className="text-sm text-gray-700">Photo / media consent given</label>
+          </div>
+          <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <input type="checkbox" id="consumableConsent" checked={data.consumableConsent} onChange={e => setData(d => ({ ...d, consumableConsent: e.target.checked }))} className="rounded mt-0.5" />
+            <div>
+              <label htmlFor="consumableConsent" className="text-sm font-medium text-gray-700">Voluntary consumable fee agreement</label>
+              <p className="text-xs text-gray-500 mt-0.5">£3.50 per session charged on invoice if agreed</p>
+            </div>
           </div>
         </div>
       )}

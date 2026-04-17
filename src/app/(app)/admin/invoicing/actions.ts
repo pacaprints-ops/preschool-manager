@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db'
 import { invoices, children, childSessions, sessionConfig, terms } from '@/lib/db/schema'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 
 function ageAtDate(dob: string, refDate: string): number {
@@ -14,18 +14,20 @@ function ageAtDate(dob: string, refDate: string): number {
   return age
 }
 
-export async function generateInvoices(termId: string) {
+export async function generateInvoices(termId: string, selectedChildIds?: string[]) {
   const term = await db.select().from(terms).where(eq(terms.id, termId)).limit(1)
   if (!term[0]) throw new Error('Term not found')
 
   const configs = await db.select().from(sessionConfig)
   const sessionMap = Object.fromEntries(configs.map(s => [s.type, s]))
 
-  const activeChildren = await db
+  let query = db
     .select({ child: children, session: childSessions })
     .from(childSessions)
     .innerJoin(children, eq(childSessions.childId, children.id))
     .where(eq(children.archived, false))
+
+  const activeChildren = await query
 
   // Group sessions by child
   const childMap: Record<string, { child: typeof children.$inferSelect; sessions: typeof childSessions.$inferSelect[] }> = {}
@@ -34,8 +36,13 @@ export async function generateInvoices(termId: string) {
     childMap[child.id].sessions.push(session)
   }
 
+  // Filter to selected children if provided
+  const toInvoice = selectedChildIds?.length
+    ? Object.values(childMap).filter(({ child }) => selectedChildIds.includes(child.id))
+    : Object.values(childMap)
+
   let created = 0
-  for (const { child, sessions: childSess } of Object.values(childMap)) {
+  for (const { child, sessions: childSess } of toInvoice) {
     const existing = await db.select().from(invoices).where(
       and(eq(invoices.childId, child.id), eq(invoices.termId, termId))
     ).limit(1)
@@ -47,18 +54,21 @@ export async function generateInvoices(termId: string) {
 
     const fundedSess = childSess.filter(s => s.isFunded)
     const paidSess = childSess.filter(s => !s.isFunded)
+    const allSess = childSess
 
+    // Paid session costs (age-based hourly rate)
     let paidCostPerWeek = 0
-    let paidContribPerWeek = 0
+    let paidHoursPerWeek = 0
     for (const s of paidSess) {
       const conf = sessionMap[s.sessionType]
       if (conf) {
         const rate = is2yo ? parseFloat(conf.hourlyRate2yo) : parseFloat(conf.hourlyRate34yo)
         paidCostPerWeek += rate * parseFloat(conf.hours)
-        paidContribPerWeek += parseFloat(conf.contribution)
+        paidHoursPerWeek += parseFloat(conf.hours)
       }
     }
 
+    // Funded session info (informational — £0 charge)
     let fundedValuePerWeek = 0
     let fundedHoursPerWeek = 0
     for (const s of fundedSess) {
@@ -70,10 +80,15 @@ export async function generateInvoices(termId: string) {
       }
     }
 
+    // Consumable: £3.50 per session for ALL sessions (funded + paid), only if consent given
+    const totalSessionsPerWeek = allSess.length
+    const totalSessionsForTerm = totalSessionsPerWeek * weeks
+    const contribution = configs[0] ? parseFloat(configs[0].contribution) : 3.50
+    const contributionTotal = child.consumableConsent ? contribution * totalSessionsForTerm : 0
+
     const paidSessionsTotal = paidSess.length * weeks
     const fundedSessionsTotal = fundedSess.length * weeks
     const sessionCost = paidCostPerWeek * weeks
-    const contributionTotal = paidContribPerWeek * weeks
     const fundedValue = fundedValuePerWeek * weeks
     const fundedHoursTotal = fundedHoursPerWeek * weeks
     const amountDue = sessionCost + contributionTotal
@@ -83,10 +98,15 @@ export async function generateInvoices(termId: string) {
       termId,
       paidSessions: paidSessionsTotal,
       fundedSessions: fundedSessionsTotal,
+      fundedHoursPerWeek: fundedHoursPerWeek.toFixed(2),
+      paidHoursPerWeek: paidHoursPerWeek.toFixed(2),
       fundedHoursTotal: fundedHoursTotal.toFixed(2),
       sessionCost: sessionCost.toFixed(2),
+      consumableConsent: child.consumableConsent,
       contributionTotal: contributionTotal.toFixed(2),
       fundedValue: fundedValue.toFixed(2),
+      adjustmentAmount: '0',
+      adjustmentNote: null,
       amountDue: amountDue.toFixed(2),
       status: 'draft',
       parentEmail: null,
@@ -96,6 +116,16 @@ export async function generateInvoices(termId: string) {
 
   revalidatePath('/admin/invoicing')
   return created
+}
+
+export async function updateAdjustment(id: string, adjustmentAmount: string, adjustmentNote: string) {
+  const inv = await db.select().from(invoices).where(eq(invoices.id, id)).limit(1)
+  if (!inv[0]) return
+  const base = parseFloat(inv[0].sessionCost) + parseFloat(inv[0].contributionTotal)
+  const adj = parseFloat(adjustmentAmount) || 0
+  const amountDue = Math.max(0, base + adj).toFixed(2)
+  await db.update(invoices).set({ adjustmentAmount: adj.toFixed(2), adjustmentNote: adjustmentNote || null, amountDue }).where(eq(invoices.id, id))
+  revalidatePath('/admin/invoicing')
 }
 
 export async function markInvoicePaid(id: string) {

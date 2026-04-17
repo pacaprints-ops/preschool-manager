@@ -77,6 +77,8 @@ export const children = pgTable('children', {
   collectionPassword: text('collection_password'),
   // Photo consent
   photoConsent: boolean('photo_consent').notNull().default(false),
+  // Consumable fee consent (voluntary £3.50/session)
+  consumableConsent: boolean('consumable_consent').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
@@ -180,10 +182,15 @@ export const invoices = pgTable('invoices', {
   termId: uuid('term_id').notNull().references(() => terms.id),
   paidSessions: integer('paid_sessions').notNull().default(0),
   fundedSessions: integer('funded_sessions').notNull().default(0),
+  fundedHoursPerWeek: numeric('funded_hours_per_week', { precision: 6, scale: 2 }).notNull().default('0'),
+  paidHoursPerWeek: numeric('paid_hours_per_week', { precision: 6, scale: 2 }).notNull().default('0'),
   fundedHoursTotal: numeric('funded_hours_total', { precision: 8, scale: 2 }).notNull().default('0'),
   sessionCost: numeric('session_cost', { precision: 8, scale: 2 }).notNull(),
+  consumableConsent: boolean('consumable_consent').notNull().default(false),
   contributionTotal: numeric('contribution_total', { precision: 8, scale: 2 }).notNull(),
   fundedValue: numeric('funded_value', { precision: 8, scale: 2 }).notNull().default('0'),
+  adjustmentAmount: numeric('adjustment_amount', { precision: 8, scale: 2 }).notNull().default('0'),
+  adjustmentNote: text('adjustment_note'),
   amountDue: numeric('amount_due', { precision: 8, scale: 2 }).notNull(),
   status: invoiceStatusEnum('status').notNull().default('draft'),
   parentEmail: text('parent_email'),
