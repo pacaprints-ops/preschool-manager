@@ -52,11 +52,11 @@ async function seed() {
     console.log(`✓ Created staff: ${staff.name} (${staff.email})`)
   }
 
-  // ─── Session config (placeholder prices) ─────────────────────────────────────
+  // ─── Session config ───────────────────────────────────────────────────────────
   const sessions = [
-    { type: 'morning' as const, label: 'Morning', startTime: '09:00', endTime: '12:00', hours: '3.00', price: '5.00', contribution: '3.50' },
-    { type: 'afternoon' as const, label: 'Afternoon', startTime: '12:00', endTime: '15:00', hours: '3.00', price: '5.00', contribution: '3.50' },
-    { type: 'full_day' as const, label: 'Full Day', startTime: '09:00', endTime: '15:00', hours: '6.00', price: '5.00', contribution: '3.50' },
+    { type: 'morning' as const, label: 'Morning (Fri)', startTime: '09:00', endTime: '12:00', hours: '3.00', hourlyRate2yo: '9.00', hourlyRate34yo: '8.25', contribution: '3.50' },
+    { type: 'afternoon' as const, label: 'Afternoon', startTime: '12:00', endTime: '15:00', hours: '3.00', hourlyRate2yo: '9.00', hourlyRate34yo: '8.25', contribution: '3.50' },
+    { type: 'full_day' as const, label: 'Full Day', startTime: '09:00', endTime: '15:00', hours: '6.00', hourlyRate2yo: '9.00', hourlyRate34yo: '8.25', contribution: '3.50' },
   ]
 
   for (const session of sessions) {

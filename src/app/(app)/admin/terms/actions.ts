@@ -21,7 +21,7 @@ export async function deleteTerm(id: string) {
   revalidatePath('/admin/terms')
 }
 
-export async function updateSessionPrice(id: string, price: string, contribution: string) {
-  await db.update(sessionConfig).set({ price, contribution }).where(eq(sessionConfig.id, id))
+export async function updateSessionRates(id: string, hourlyRate2yo: string, hourlyRate34yo: string, contribution: string) {
+  await db.update(sessionConfig).set({ hourlyRate2yo, hourlyRate34yo, contribution }).where(eq(sessionConfig.id, id))
   revalidatePath('/admin/terms')
 }

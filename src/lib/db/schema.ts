@@ -49,10 +49,11 @@ export const sessionConfig = pgTable('session_config', {
   type: sessionTypeEnum('type').notNull().unique(),
   label: text('label').notNull(), // e.g. "Morning"
   startTime: text('start_time').notNull(), // "09:00"
-  endTime: text('end_time').notNull(),   // "12:00"
+  endTime: text('end_time').notNull(),   // "15:00"
   hours: numeric('hours', { precision: 4, scale: 2 }).notNull(),
-  price: numeric('price', { precision: 6, scale: 2 }).notNull(),
-  contribution: numeric('contribution', { precision: 6, scale: 2 }).notNull(),
+  hourlyRate2yo: numeric('hourly_rate_2yo', { precision: 6, scale: 2 }).notNull(), // £9.00/hr for 2-year-olds
+  hourlyRate34yo: numeric('hourly_rate_34yo', { precision: 6, scale: 2 }).notNull(), // £8.25/hr for 3&4-year-olds
+  contribution: numeric('contribution', { precision: 6, scale: 2 }).notNull(), // consumable fee per session
 })
 
 // ─── Children ─────────────────────────────────────────────────────────────────

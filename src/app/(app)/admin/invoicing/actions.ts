@@ -5,6 +5,15 @@ import { invoices, children, childSessions, sessionConfig, terms } from '@/lib/d
 import { eq, and } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 
+function ageAtDate(dob: string, refDate: string): number {
+  const d = new Date(dob)
+  const r = new Date(refDate)
+  let age = r.getFullYear() - d.getFullYear()
+  const m = r.getMonth() - d.getMonth()
+  if (m < 0 || (m === 0 && r.getDate() < d.getDate())) age--
+  return age
+}
+
 export async function generateInvoices(termId: string) {
   const term = await db.select().from(terms).where(eq(terms.id, termId)).limit(1)
   if (!term[0]) throw new Error('Term not found')
@@ -33,29 +42,30 @@ export async function generateInvoices(termId: string) {
     if (existing[0]) continue
 
     const weeks = term[0].weekCount
+    const age = ageAtDate(child.dateOfBirth, term[0].startDate)
+    const is2yo = age <= 2
 
-    // Split into funded and paid sessions
     const fundedSess = childSess.filter(s => s.isFunded)
     const paidSess = childSess.filter(s => !s.isFunded)
 
-    // Paid session totals
     let paidCostPerWeek = 0
     let paidContribPerWeek = 0
     for (const s of paidSess) {
       const conf = sessionMap[s.sessionType]
       if (conf) {
-        paidCostPerWeek += parseFloat(conf.price)
+        const rate = is2yo ? parseFloat(conf.hourlyRate2yo) : parseFloat(conf.hourlyRate34yo)
+        paidCostPerWeek += rate * parseFloat(conf.hours)
         paidContribPerWeek += parseFloat(conf.contribution)
       }
     }
 
-    // Funded session totals (informational — shown on invoice but £0 charge)
     let fundedValuePerWeek = 0
     let fundedHoursPerWeek = 0
     for (const s of fundedSess) {
       const conf = sessionMap[s.sessionType]
       if (conf) {
-        fundedValuePerWeek += parseFloat(conf.price)
+        const rate = is2yo ? parseFloat(conf.hourlyRate2yo) : parseFloat(conf.hourlyRate34yo)
+        fundedValuePerWeek += rate * parseFloat(conf.hours)
         fundedHoursPerWeek += parseFloat(conf.hours)
       }
     }

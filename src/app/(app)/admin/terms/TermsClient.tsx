@@ -1,10 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { addTerm, deleteTerm, updateSessionPrice } from './actions'
+import { addTerm, deleteTerm, updateSessionRates } from './actions'
 
 type Term = { id: string; name: string; academicYear: string; startDate: string; endDate: string; weekCount: number }
-type SessionConf = { id: string; type: string; label: string; startTime: string; endTime: string; hours: string; price: string; contribution: string }
+type SessionConf = { id: string; type: string; label: string; startTime: string; endTime: string; hours: string; hourlyRate2yo: string; hourlyRate34yo: string; contribution: string }
 
 const input = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400'
 
@@ -12,8 +12,8 @@ export default function TermsClient({ terms, sessions }: { terms: Term[]; sessio
   const [addingTerm, setAddingTerm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editingSession, setEditingSession] = useState<string | null>(null)
-  const [sessionPrices, setSessionPrices] = useState<Record<string, { price: string; contribution: string }>>(
-    Object.fromEntries(sessions.map(s => [s.id, { price: s.price, contribution: s.contribution }]))
+  const [sessionRates, setSessionRates] = useState<Record<string, { hourlyRate2yo: string; hourlyRate34yo: string; contribution: string }>>(
+    Object.fromEntries(sessions.map(s => [s.id, { hourlyRate2yo: s.hourlyRate2yo, hourlyRate34yo: s.hourlyRate34yo, contribution: s.contribution }]))
   )
   const [termForm, setTermForm] = useState({ name: '', academicYear: '', startDate: '', endDate: '', weekCount: '' })
 
@@ -40,8 +40,8 @@ export default function TermsClient({ terms, sessions }: { terms: Term[]; sessio
   }
 
   async function handleSaveSession(id: string) {
-    const { price, contribution } = sessionPrices[id]
-    await updateSessionPrice(id, price, contribution)
+    const { hourlyRate2yo, hourlyRate34yo, contribution } = sessionRates[id]
+    await updateSessionRates(id, hourlyRate2yo, hourlyRate34yo, contribution)
     setEditingSession(null)
   }
 
@@ -50,8 +50,10 @@ export default function TermsClient({ terms, sessions }: { terms: Term[]; sessio
       {/* Session config */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-gray-700">Session Prices</h2>
-          <span className="text-xs text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full">⚠ Placeholder prices — confirm with Sally & Louise</span>
+          <div>
+            <h2 className="text-sm font-semibold text-gray-700">Session Rates</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Hourly rates by age group + consumable fee per session</p>
+          </div>
         </div>
         <div className="space-y-3">
           {sessions.map(s => (
@@ -61,20 +63,31 @@ export default function TermsClient({ terms, sessions }: { terms: Term[]; sessio
                 <div className="text-xs text-gray-500">{s.startTime} – {s.endTime} · {s.hours}h</div>
               </div>
               {editingSession === s.id ? (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <div>
-                    <label className="block text-xs text-gray-500 mb-0.5">Price £</label>
+                    <label className="block text-xs text-gray-500 mb-0.5">2yo £/hr</label>
                     <input
-                      type="number" step="0.01" value={sessionPrices[s.id]?.price ?? s.price}
-                      onChange={e => setSessionPrices(p => ({ ...p, [s.id]: { ...p[s.id], price: e.target.value } }))}
+                      type="number" step="0.01"
+                      value={sessionRates[s.id]?.hourlyRate2yo ?? s.hourlyRate2yo}
+                      onChange={e => setSessionRates(p => ({ ...p, [s.id]: { ...p[s.id], hourlyRate2yo: e.target.value } }))}
                       className="w-20 border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 bg-white"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-0.5">Contribution £</label>
+                    <label className="block text-xs text-gray-500 mb-0.5">3&4yo £/hr</label>
                     <input
-                      type="number" step="0.01" value={sessionPrices[s.id]?.contribution ?? s.contribution}
-                      onChange={e => setSessionPrices(p => ({ ...p, [s.id]: { ...p[s.id], contribution: e.target.value } }))}
+                      type="number" step="0.01"
+                      value={sessionRates[s.id]?.hourlyRate34yo ?? s.hourlyRate34yo}
+                      onChange={e => setSessionRates(p => ({ ...p, [s.id]: { ...p[s.id], hourlyRate34yo: e.target.value } }))}
+                      className="w-20 border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-0.5">Consumable £</label>
+                    <input
+                      type="number" step="0.01"
+                      value={sessionRates[s.id]?.contribution ?? s.contribution}
+                      onChange={e => setSessionRates(p => ({ ...p, [s.id]: { ...p[s.id], contribution: e.target.value } }))}
                       className="w-20 border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 bg-white"
                     />
                   </div>
@@ -84,14 +97,19 @@ export default function TermsClient({ terms, sessions }: { terms: Term[]; sessio
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-4">
-                  <div className="text-sm text-gray-700">£{s.price} + £{s.contribution} contribution</div>
+                <div className="flex items-center gap-4 text-sm text-gray-700">
+                  <span>2yo: £{s.hourlyRate2yo}/hr</span>
+                  <span>3&4yo: £{s.hourlyRate34yo}/hr</span>
+                  <span className="text-gray-500">+ £{s.contribution} consumable</span>
                   <button onClick={() => setEditingSession(s.id)} className="text-xs text-amber-600 hover:text-amber-700">Edit</button>
                 </div>
               )}
             </div>
           ))}
         </div>
+        <p className="text-xs text-gray-400 mt-3">
+          Rates apply to paid sessions only. Funded sessions charge consumable fee only (£{sessions[0]?.contribution ?? '3.50'}/session).
+        </p>
       </div>
 
       {/* Terms */}
@@ -128,7 +146,7 @@ export default function TermsClient({ terms, sessions }: { terms: Term[]; sessio
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-600 mb-1">Term name *</label>
-                <input value={termForm.name} onChange={e => setTermForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Autumn Term 2025" className={input} />
+                <input value={termForm.name} onChange={e => setTermForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Autumn 1" className={input} />
               </div>
               <div>
                 <label className="block text-xs text-gray-600 mb-1">Academic year *</label>
