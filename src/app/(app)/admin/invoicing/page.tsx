@@ -1,8 +1,22 @@
-export default function InvoicingPage() {
+import { db } from '@/lib/db'
+import { invoices, children, terms } from '@/lib/db/schema'
+import { eq } from 'drizzle-orm'
+import InvoicingClient from './InvoicingClient'
+
+export default async function InvoicingPage() {
+  const allTerms = await db.select().from(terms).orderBy(terms.startDate)
+
+  const allInvoices = await db
+    .select({ invoice: invoices, child: children })
+    .from(invoices)
+    .innerJoin(children, eq(invoices.childId, children.id))
+    .orderBy(children.lastName)
+
   return (
-    <div>
+    <div className="max-w-4xl">
       <h1 className="text-xl font-bold text-gray-800 mb-1">Invoicing</h1>
-      <p className="text-sm text-gray-500">Coming soon</p>
+      <p className="text-sm text-gray-500 mb-6">Generate and manage term invoices for all active children.</p>
+      <InvoicingClient terms={allTerms} invoices={allInvoices} />
     </div>
   )
 }
