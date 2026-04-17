@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { auth, signOut } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 
 const navLinks = [
@@ -16,13 +16,10 @@ const adminLinks = [
 ]
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const session = await auth()
+  if (!session) redirect('/login')
 
-  if (!user) redirect('/login')
-
-  // TODO: fetch role from profiles table once schema is set up
-  const isAdmin = true
+  const isAdmin = session.user?.role === 'admin'
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -54,8 +51,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </>
             )}
           </div>
-          <form action="/auth/signout" method="post">
-            <button className="text-xs text-amber-200 hover:text-white transition-colors">Sign out</button>
+          <form
+            action={async () => {
+              'use server'
+              await signOut({ redirectTo: '/login' })
+            }}
+          >
+            <button className="text-xs text-amber-200 hover:text-white transition-colors">
+              Sign out
+            </button>
           </form>
         </div>
       </nav>
