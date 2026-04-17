@@ -15,7 +15,7 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
     setLoading(true)
     const form = new FormData(e.currentTarget)
 
-    await createChild({
+    const result = await createChild({
       firstName: form.get('firstName') as string,
       lastName: form.get('lastName') as string,
       dateOfBirth: form.get('dateOfBirth') as string,
@@ -29,6 +29,7 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
       collectionPassword: form.get('collectionPassword') as string,
       photoConsent: form.get('photoConsent') === 'on',
     })
+    router.push(`/children/${result.id}`)
   }
 
   return (
@@ -76,10 +77,7 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
         {isFunded && (
           <div className="ml-6">
             <label className="block text-sm text-gray-600 mb-1">Hours per week</label>
-            <select name="fundedHours" className={`${input} w-40`}>
-              <option value="15">15 hours</option>
-              <option value="30">30 hours</option>
-            </select>
+            <input type="number" name="fundedHours" min="1" max="30" step="0.5" placeholder="e.g. 15" className={`${input} w-40`} />
           </div>
         )}
       </div>

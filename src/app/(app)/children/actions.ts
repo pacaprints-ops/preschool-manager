@@ -3,11 +3,12 @@
 import { db } from '@/lib/db'
 import {
   children, childSessions, emergencyContacts, medications,
-  childNotes, accidentForms, waitingList,
+  childNotes, accidentForms, waitingList, childSiblings,
 } from '@/lib/db/schema'
-import { eq } from 'drizzle-orm'
+import { eq, or, and } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+// Note: redirect still used by archiveChild and promoteFromWaitingList
 
 export async function createChild(data: {
   firstName: string
@@ -39,7 +40,7 @@ export async function createChild(data: {
   }).returning()
 
   revalidatePath('/children')
-  redirect(`/children/${child.id}`)
+  return { id: child.id }
 }
 
 export async function updateChild(id: string, data: {
@@ -194,4 +195,27 @@ export async function promoteFromWaitingList(waitlistId: string, data: {
   revalidatePath('/waiting-list')
   revalidatePath('/children')
   redirect(`/children/${child.id}`)
+}
+
+// ─── Siblings ─────────────────────────────────────────────────────────────────
+
+export async function addSibling(childId: string, siblingId: string) {
+  // Insert both directions so each child sees the other as a sibling
+  await db.insert(childSiblings).values([
+    { childId, siblingId },
+    { childId: siblingId, siblingId: childId },
+  ])
+  revalidatePath(`/children/${childId}`)
+  revalidatePath(`/children/${siblingId}`)
+}
+
+export async function removeSibling(childId: string, siblingId: string) {
+  await db.delete(childSiblings).where(
+    or(
+      and(eq(childSiblings.childId, childId), eq(childSiblings.siblingId, siblingId)),
+      and(eq(childSiblings.childId, siblingId), eq(childSiblings.siblingId, childId)),
+    )
+  )
+  revalidatePath(`/children/${childId}`)
+  revalidatePath(`/children/${siblingId}`)
 }

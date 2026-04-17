@@ -126,10 +126,13 @@ export default function ChildInfoSection({
             <input type="checkbox" id="isFunded" checked={data.isFunded} onChange={e => setData(d => ({ ...d, isFunded: e.target.checked }))} className="rounded" />
             <label htmlFor="isFunded" className="text-sm text-gray-700">Receiving funded hours</label>
             {data.isFunded && (
-              <select value={data.fundedHours ?? '15'} onChange={e => setData(d => ({ ...d, fundedHours: e.target.value }))} className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 bg-white ml-2">
-                <option value="15">15 hours</option>
-                <option value="30">30 hours</option>
-              </select>
+              <input
+                type="number" min="1" max="30" step="0.5"
+                value={data.fundedHours ?? ''}
+                onChange={e => setData(d => ({ ...d, fundedHours: e.target.value }))}
+                placeholder="hrs/week"
+                className="w-24 border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 bg-white ml-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              />
             )}
           </div>
           <div className="flex items-center gap-3">

@@ -1,9 +1,9 @@
 import { db } from '@/lib/db'
 import {
   children, childSessions, emergencyContacts, medications,
-  childNotes, accidentForms, registerEntries, terms, users,
+  childNotes, accidentForms, registerEntries, terms, users, childSiblings,
 } from '@/lib/db/schema'
-import { eq, and, gte, lte, sql } from 'drizzle-orm'
+import { eq, and, gte, lte, sql, inArray } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import Link from 'next/link'
@@ -14,10 +14,11 @@ import MedicationsSection from './MedicationsSection'
 import NotesSection from './NotesSection'
 import AccidentsSection from './AccidentsSection'
 import SicknessSection from './SicknessSection'
+import SiblingsSection from './SiblingsSection'
 
-export default async function ChildProfilePage({ params }: { params: { id: string } }) {
+export default async function ChildProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
-  const { id } = params
+  const { id } = await params
 
   const [child] = await db.select().from(children).where(eq(children.id, id)).limit(1)
   if (!child) notFound()
@@ -30,6 +31,7 @@ export default async function ChildProfilePage({ params }: { params: { id: strin
     accidents,
     allStaff,
     allTerms,
+    siblingLinks,
   ] = await Promise.all([
     db.select().from(childSessions).where(eq(childSessions.childId, id)),
     db.select().from(emergencyContacts).where(eq(emergencyContacts.childId, id)),
@@ -50,7 +52,21 @@ export default async function ChildProfilePage({ params }: { params: { id: strin
       .orderBy(accidentForms.incidentDate),
     db.select({ id: users.id, name: users.name }).from(users),
     db.select().from(terms).orderBy(terms.startDate),
+    db.select({ siblingId: childSiblings.siblingId }).from(childSiblings).where(eq(childSiblings.childId, id)),
   ])
+
+  // Fetch sibling details
+  const siblingIds = siblingLinks.map(s => s.siblingId)
+  const siblings = siblingIds.length > 0
+    ? await db.select({ id: children.id, firstName: children.firstName, lastName: children.lastName, archived: children.archived })
+        .from(children)
+        .where(inArray(children.id, siblingIds))
+    : []
+
+  // All active children for linking new siblings (excluding self and already linked)
+  const allChildren = await db.select({ id: children.id, firstName: children.firstName, lastName: children.lastName })
+    .from(children)
+    .where(eq(children.archived, false))
 
   // Sickness stats
   const today = new Date()
@@ -121,6 +137,7 @@ export default async function ChildProfilePage({ params }: { params: { id: strin
           yearTotal={yearTotal}
         />
         <ChildInfoSection child={child} staff={allStaff} />
+        <SiblingsSection childId={id} siblings={siblings} allChildren={allChildren} />
         <SessionsSection childId={id} sessions={childSessionsData} />
         <ContactsSection childId={id} contacts={contacts} />
         <MedicationsSection childId={id} medications={meds} />

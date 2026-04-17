@@ -223,3 +223,11 @@ export const staffHours = pgTable('staff_hours', {
   hoursWorked: numeric('hours_worked', { precision: 4, scale: 2 }).notNull(),
   notes: text('notes'),
 })
+
+// ─── Child siblings (junction) ────────────────────────────────────────────────
+
+export const childSiblings = pgTable('child_siblings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  childId: uuid('child_id').notNull().references(() => children.id),
+  siblingId: uuid('sibling_id').notNull().references(() => children.id),
+})
