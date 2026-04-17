@@ -1,6 +1,6 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 
-const AMBER = '#1e3a8a'
+const AMBER = '#020e2f'
 const DARK = '#111827'
 const GREY = '#6b7280'
 const LIGHT = '#f9fafb'

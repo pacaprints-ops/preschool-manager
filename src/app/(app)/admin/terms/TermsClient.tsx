@@ -57,51 +57,48 @@ export default function TermsClient({ terms, sessions }: { terms: Term[]; sessio
         </div>
         <div className="space-y-3">
           {sessions.map(s => (
-            <div key={s.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
-              <div className="flex-1">
-                <div className="text-sm font-medium text-gray-900">{s.label}</div>
-                <div className="text-xs text-gray-500">{s.startTime} – {s.endTime} · {s.hours}h</div>
+            <div key={s.id} className="p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <div className="text-sm font-medium text-gray-900">{s.label}</div>
+                  <div className="text-xs text-gray-500">{s.startTime} – {s.endTime} · {s.hours}h</div>
+                </div>
+                {editingSession !== s.id && (
+                  <button onClick={() => setEditingSession(s.id)} className="text-xs text-blue-800 hover:text-blue-900 shrink-0">Edit</button>
+                )}
               </div>
               {editingSession === s.id ? (
-                <div className="flex items-center gap-3">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-0.5">2yo £/hr</label>
-                    <input
-                      type="number" step="0.01"
-                      value={sessionRates[s.id]?.hourlyRate2yo ?? s.hourlyRate2yo}
-                      onChange={e => setSessionRates(p => ({ ...p, [s.id]: { ...p[s.id], hourlyRate2yo: e.target.value } }))}
-                      className="w-20 border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 bg-white"
-                    />
+                <div className="mt-3 space-y-3">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-0.5">2yo £/hr</label>
+                      <input type="number" step="0.01" value={sessionRates[s.id]?.hourlyRate2yo ?? s.hourlyRate2yo}
+                        onChange={e => setSessionRates(p => ({ ...p, [s.id]: { ...p[s.id], hourlyRate2yo: e.target.value } }))}
+                        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-gray-900 bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-0.5">3&4yo £/hr</label>
+                      <input type="number" step="0.01" value={sessionRates[s.id]?.hourlyRate34yo ?? s.hourlyRate34yo}
+                        onChange={e => setSessionRates(p => ({ ...p, [s.id]: { ...p[s.id], hourlyRate34yo: e.target.value } }))}
+                        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-gray-900 bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-0.5">Consumable £</label>
+                      <input type="number" step="0.01" value={sessionRates[s.id]?.contribution ?? s.contribution}
+                        onChange={e => setSessionRates(p => ({ ...p, [s.id]: { ...p[s.id], contribution: e.target.value } }))}
+                        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-gray-900 bg-white" />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-0.5">3&4yo £/hr</label>
-                    <input
-                      type="number" step="0.01"
-                      value={sessionRates[s.id]?.hourlyRate34yo ?? s.hourlyRate34yo}
-                      onChange={e => setSessionRates(p => ({ ...p, [s.id]: { ...p[s.id], hourlyRate34yo: e.target.value } }))}
-                      className="w-20 border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-0.5">Consumable £</label>
-                    <input
-                      type="number" step="0.01"
-                      value={sessionRates[s.id]?.contribution ?? s.contribution}
-                      onChange={e => setSessionRates(p => ({ ...p, [s.id]: { ...p[s.id], contribution: e.target.value } }))}
-                      className="w-20 border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 bg-white"
-                    />
-                  </div>
-                  <div className="flex gap-1 mt-4">
-                    <button onClick={() => handleSaveSession(s.id)} className="text-xs bg-blue-500 text-white px-2 py-1 rounded">Save</button>
-                    <button onClick={() => setEditingSession(null)} className="text-xs text-gray-500 px-2 py-1 rounded border border-gray-300">Cancel</button>
+                  <div className="flex gap-2">
+                    <button onClick={() => handleSaveSession(s.id)} className="text-xs bg-blue-800 text-white px-3 py-1.5 rounded hover:bg-blue-900">Save</button>
+                    <button onClick={() => setEditingSession(null)} className="text-xs text-gray-500 px-3 py-1.5 rounded border border-gray-300">Cancel</button>
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-4 text-sm text-gray-700">
-                  <span>2yo: £{s.hourlyRate2yo}/hr</span>
-                  <span>3&4yo: £{s.hourlyRate34yo}/hr</span>
-                  <span className="text-gray-500">+ £{s.contribution} consumable</span>
-                  <button onClick={() => setEditingSession(s.id)} className="text-xs text-blue-800 hover:text-blue-900">Edit</button>
+                <div className="flex flex-wrap gap-3 mt-1.5 text-sm text-gray-600">
+                  <span>2yo: <strong className="text-gray-900">£{s.hourlyRate2yo}/hr</strong></span>
+                  <span>3&4yo: <strong className="text-gray-900">£{s.hourlyRate34yo}/hr</strong></span>
+                  <span>Consumable: <strong className="text-gray-900">£{s.contribution}</strong></span>
                 </div>
               )}
             </div>
@@ -127,14 +124,17 @@ export default function TermsClient({ terms, sessions }: { terms: Term[]; sessio
 
         <div className="space-y-2 mb-4">
           {terms.map(t => (
-            <div key={t.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-sm">
+            <div key={t.id} className="flex items-start sm:items-center justify-between gap-2 p-3 bg-gray-50 rounded-lg text-sm flex-wrap">
               <div>
                 <span className="font-medium text-gray-900">{t.name}</span>
                 <span className="text-gray-500 ml-2">{t.academicYear}</span>
+                <div className="text-xs text-gray-500 mt-0.5 sm:hidden">
+                  {new Date(t.startDate + 'T12:00:00').toLocaleDateString('en-GB')} – {new Date(t.endDate + 'T12:00:00').toLocaleDateString('en-GB')} · {t.weekCount} wks
+                </div>
               </div>
               <div className="flex items-center gap-4 text-gray-600">
-                <span>{new Date(t.startDate + 'T12:00:00').toLocaleDateString('en-GB')} – {new Date(t.endDate + 'T12:00:00').toLocaleDateString('en-GB')}</span>
-                <span>{t.weekCount} weeks</span>
+                <span className="hidden sm:inline">{new Date(t.startDate + 'T12:00:00').toLocaleDateString('en-GB')} – {new Date(t.endDate + 'T12:00:00').toLocaleDateString('en-GB')}</span>
+                <span className="hidden sm:inline">{t.weekCount} weeks</span>
                 <button onClick={() => deleteTerm(t.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
               </div>
             </div>
@@ -167,7 +167,7 @@ export default function TermsClient({ terms, sessions }: { terms: Term[]; sessio
                 <input type="number" value={termForm.weekCount} onChange={e => setTermForm(f => ({ ...f, weekCount: e.target.value }))} placeholder="auto" className={input} />
               </div>
             </div>
-            <button onClick={handleAddTerm} disabled={saving} className="px-4 py-2 bg-blue-500 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50">
+            <button onClick={handleAddTerm} disabled={saving} className="px-4 py-2 bg-blue-800 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50">
               {saving ? 'Saving…' : 'Add term'}
             </button>
           </div>

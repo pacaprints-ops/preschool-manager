@@ -132,7 +132,7 @@ export default function WaitingListClient({ entries }: { entries: Entry[] }) {
       {adding && (
         <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
           <h2 className="text-sm font-semibold text-gray-700">Add child to waiting list</h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-gray-600 mb-1">Child first name *</label>
               <input value={form.childFirstName} onChange={e => setForm(f => ({ ...f, childFirstName: e.target.value }))} className={inputCls} />
@@ -142,7 +142,7 @@ export default function WaitingListClient({ entries }: { entries: Entry[] }) {
               <input value={form.childLastName} onChange={e => setForm(f => ({ ...f, childLastName: e.target.value }))} className={inputCls} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-gray-600 mb-1">Date of birth</label>
               <input type="date" value={form.dateOfBirth} onChange={e => setForm(f => ({ ...f, dateOfBirth: e.target.value }))} className={inputCls} />
@@ -152,7 +152,7 @@ export default function WaitingListClient({ entries }: { entries: Entry[] }) {
               <input value={form.parentName} onChange={e => setForm(f => ({ ...f, parentName: e.target.value }))} className={inputCls} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-gray-600 mb-1">Phone *</label>
               <input value={form.parentPhone} onChange={e => setForm(f => ({ ...f, parentPhone: e.target.value }))} className={inputCls} />

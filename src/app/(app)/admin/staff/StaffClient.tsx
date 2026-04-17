@@ -90,6 +90,7 @@ export default function StaffClient({ staff, sickness, training }: {
       {/* Team rota overview */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Weekly Rota</h3>
+        <div className="overflow-x-auto -mx-4 px-4">
         <table className="text-sm">
           <thead>
             <tr>
@@ -113,6 +114,7 @@ export default function StaffClient({ staff, sickness, training }: {
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Per-person panel */}
