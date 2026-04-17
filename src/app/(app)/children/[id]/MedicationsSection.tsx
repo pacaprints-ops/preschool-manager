@@ -12,7 +12,7 @@ type Medication = {
   notes: string | null
 }
 
-const input = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400'
+const input = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700'
 
 export default function MedicationsSection({ childId, medications }: { childId: string; medications: Medication[] }) {
   const [adding, setAdding] = useState(false)
@@ -32,7 +32,7 @@ export default function MedicationsSection({ childId, medications }: { childId: 
     <div className="bg-white rounded-xl border border-gray-200 p-4">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-gray-700">Medications</h2>
-        <button onClick={() => setAdding(a => !a)} className="text-xs text-amber-600 hover:text-amber-700">
+        <button onClick={() => setAdding(a => !a)} className="text-xs text-blue-800 hover:text-blue-900">
           {adding ? 'Cancel' : '+ Add'}
         </button>
       </div>
@@ -82,7 +82,7 @@ export default function MedicationsSection({ childId, medications }: { childId: 
             <input type="checkbox" id="adminConsent" checked={form.adminConsent} onChange={e => setForm(f => ({ ...f, adminConsent: e.target.checked }))} className="rounded" />
             <label htmlFor="adminConsent" className="text-sm text-gray-700">Parent consent for staff to administer</label>
           </div>
-          <button onClick={handleAdd} disabled={saving} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm rounded-lg disabled:opacity-50">
+          <button onClick={handleAdd} disabled={saving} className="px-4 py-2 bg-blue-500 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50">
             {saving ? 'Saving…' : 'Add medication'}
           </button>
         </div>

@@ -35,7 +35,7 @@ export default function SiblingsSection({
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold text-gray-700">Siblings</h2>
         {available.length > 0 && (
-          <button onClick={() => setLinking(l => !l)} className="text-xs text-amber-600 hover:text-amber-700">
+          <button onClick={() => setLinking(l => !l)} className="text-xs text-blue-800 hover:text-blue-900">
             {linking ? 'Cancel' : '+ Link sibling'}
           </button>
         )}
@@ -48,7 +48,7 @@ export default function SiblingsSection({
       <div className="space-y-2">
         {siblings.map(s => (
           <div key={s.id} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg text-sm">
-            <Link href={`/children/${s.id}`} className="font-medium text-amber-700 hover:underline">
+            <Link href={`/children/${s.id}`} className="font-medium text-blue-900 hover:underline">
               {s.firstName} {s.lastName}
             </Link>
             <div className="flex items-center gap-3">
@@ -69,7 +69,7 @@ export default function SiblingsSection({
           <select
             value={selectedId}
             onChange={e => setSelectedId(e.target.value)}
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700"
           >
             <option value="">— Select child —</option>
             {available.map(c => (
@@ -79,7 +79,7 @@ export default function SiblingsSection({
           <button
             onClick={handleLink}
             disabled={!selectedId}
-            className="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm rounded-lg disabled:opacity-50"
+            className="px-3 py-2 bg-blue-500 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50"
           >
             Link
           </button>

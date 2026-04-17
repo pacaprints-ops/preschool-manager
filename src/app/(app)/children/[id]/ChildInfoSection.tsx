@@ -18,7 +18,7 @@ type Child = {
   consumableConsent: boolean
 }
 
-const input = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400'
+const input = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700'
 
 export default function ChildInfoSection({
   child, staff, defaultEditing = false,
@@ -57,10 +57,10 @@ export default function ChildInfoSection({
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-gray-700">Child Information</h2>
         {!editing ? (
-          <button onClick={() => setEditing(true)} className="text-xs text-amber-600 hover:text-amber-700">Edit</button>
+          <button onClick={() => setEditing(true)} className="text-xs text-blue-800 hover:text-blue-900">Edit</button>
         ) : (
           <div className="flex gap-2">
-            <button onClick={handleSave} disabled={saving} className="text-xs bg-amber-500 text-white px-3 py-1 rounded-lg hover:bg-amber-600 disabled:opacity-50">
+            <button onClick={handleSave} disabled={saving} className="text-xs bg-blue-500 text-white px-3 py-1 rounded-lg hover:bg-blue-900 disabled:opacity-50">
               {saving ? 'Saving…' : 'Save'}
             </button>
             <button onClick={() => { setData(child); setEditing(false) }} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
@@ -76,7 +76,7 @@ export default function ChildInfoSection({
           <div><dt className="text-gray-500">Key worker</dt><dd className="text-gray-900">{keyWorkerName}</dd></div>
           <div>
             <dt className="text-gray-500">Collection password</dt>
-            <dd className="text-gray-900 font-mono bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-sm inline-block mt-0.5">
+            <dd className="text-gray-900 font-mono bg-blue-50 border border-blue-200 px-2 py-0.5 rounded text-sm inline-block mt-0.5">
               {data.collectionPassword || '—'}
             </dd>
           </div>
@@ -143,7 +143,7 @@ export default function ChildInfoSection({
             <input type="checkbox" id="photoConsent" checked={data.photoConsent} onChange={e => setData(d => ({ ...d, photoConsent: e.target.checked }))} className="rounded" />
             <label htmlFor="photoConsent" className="text-sm text-gray-700">Photo / media consent given</label>
           </div>
-          <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <input type="checkbox" id="consumableConsent" checked={data.consumableConsent} onChange={e => setData(d => ({ ...d, consumableConsent: e.target.checked }))} className="rounded mt-0.5" />
             <div>
               <label htmlFor="consumableConsent" className="text-sm font-medium text-gray-700">Voluntary consumable fee agreement</label>

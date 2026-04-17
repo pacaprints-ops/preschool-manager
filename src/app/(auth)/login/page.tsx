@@ -33,10 +33,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-amber-50">
+    <div className="min-h-screen flex items-center justify-center bg-blue-50">
       <div className="bg-white rounded-2xl shadow-md p-8 w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-amber-700">Winton Pre-School</h1>
+          <h1 className="text-2xl font-bold text-blue-900">Winton Pre-School</h1>
           <p className="text-sm text-gray-500 mt-1">Little Explorers</p>
         </div>
 
@@ -48,7 +48,7 @@ export default function LoginPage() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700"
             />
           </div>
           <div>
@@ -58,7 +58,7 @@ export default function LoginPage() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700"
             />
           </div>
 
@@ -67,7 +67,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-amber-500 hover:bg-amber-600 text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
+            className="w-full bg-blue-500 hover:bg-blue-900 text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>

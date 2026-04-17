@@ -8,7 +8,7 @@ type Sickness = { id: string; userId: string; startDate: string; endDate: string
 type Training = { id: string; userId: string; trainingName: string; completedDate: string; expiryDate: string | null; notes: string | null }
 type Hours = { id: string; userId: string; date: string; hoursWorked: string; notes: string | null }
 
-const input = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400'
+const input = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700'
 
 function daysUntilExpiry(dateStr: string | null): number | null {
   if (!dateStr) return null
@@ -91,7 +91,7 @@ export default function StaffClient({ staff, sickness, training, hours }: {
               const member = staff.find(s => s.id === t.userId)
               const days = daysUntilExpiry(t.expiryDate)
               return (
-                <div key={t.id} className="text-sm text-orange-700">
+                <div key={t.id} className="text-sm text-blue-800">
                   ⚡ <strong>{member?.name}</strong> — {t.trainingName} expires in {days} days
                 </div>
               )
@@ -106,7 +106,7 @@ export default function StaffClient({ staff, sickness, training, hours }: {
             <button
               key={s.id}
               onClick={() => setSelectedStaff(s.id)}
-              className={`px-4 py-3 text-sm font-medium transition-colors ${selectedStaff === s.id ? 'bg-amber-50 text-amber-700 border-b-2 border-amber-500' : 'text-gray-600 hover:bg-gray-50'}`}
+              className={`px-4 py-3 text-sm font-medium transition-colors ${selectedStaff === s.id ? 'bg-blue-50 text-blue-900 border-b-2 border-blue-800' : 'text-gray-600 hover:bg-gray-50'}`}
             >
               {s.name}
               {training.some(t => {
@@ -124,7 +124,7 @@ export default function StaffClient({ staff, sickness, training, hours }: {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${activeTab === tab ? 'bg-amber-500 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${activeTab === tab ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
               >
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
@@ -135,7 +135,7 @@ export default function StaffClient({ staff, sickness, training, hours }: {
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-500">{staffTraining.length} training records</span>
-                <button onClick={() => setAddingTraining(a => !a)} className="text-xs text-amber-600 hover:text-amber-700">
+                <button onClick={() => setAddingTraining(a => !a)} className="text-xs text-blue-800 hover:text-blue-900">
                   {addingTraining ? 'Cancel' : '+ Add training'}
                 </button>
               </div>
@@ -144,12 +144,12 @@ export default function StaffClient({ staff, sickness, training, hours }: {
                 const isExpired = days !== null && days < 0
                 const isExpiring = days !== null && days <= 60 && days >= 0
                 return (
-                  <div key={t.id} className={`flex items-start justify-between p-3 rounded-lg text-sm ${isExpired ? 'bg-red-50 border border-red-200' : isExpiring ? 'bg-orange-50 border border-orange-200' : 'bg-gray-50'}`}>
+                  <div key={t.id} className={`flex items-start justify-between p-3 rounded-lg text-sm ${isExpired ? 'bg-red-50 border border-red-200' : isExpiring ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'}`}>
                     <div>
                       <div className="font-medium text-gray-900">{t.trainingName}</div>
                       <div className="text-gray-500">Completed: {new Date(t.completedDate + 'T12:00:00').toLocaleDateString('en-GB')}</div>
                       {t.expiryDate && (
-                        <div className={isExpired ? 'text-red-600 font-medium' : isExpiring ? 'text-orange-600' : 'text-gray-500'}>
+                        <div className={isExpired ? 'text-red-600 font-medium' : isExpiring ? 'text-blue-800' : 'text-gray-500'}>
                           Expires: {new Date(t.expiryDate + 'T12:00:00').toLocaleDateString('en-GB')}
                           {isExpired && ' — EXPIRED'}
                           {isExpiring && ` — ${days} days left`}
@@ -183,7 +183,7 @@ export default function StaffClient({ staff, sickness, training, hours }: {
                       <input value={trainingForm.notes} onChange={e => setTrainingForm(f => ({ ...f, notes: e.target.value }))} className={input} />
                     </div>
                   </div>
-                  <button onClick={handleAddTraining} disabled={saving} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm rounded-lg disabled:opacity-50">
+                  <button onClick={handleAddTraining} disabled={saving} className="px-4 py-2 bg-blue-500 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50">
                     {saving ? 'Saving…' : 'Save'}
                   </button>
                 </div>
@@ -195,7 +195,7 @@ export default function StaffClient({ staff, sickness, training, hours }: {
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-500">{staffSickness.length} sickness records</span>
-                <button onClick={() => setAddingSickness(a => !a)} className="text-xs text-amber-600 hover:text-amber-700">
+                <button onClick={() => setAddingSickness(a => !a)} className="text-xs text-blue-800 hover:text-blue-900">
                   {addingSickness ? 'Cancel' : '+ Log sickness'}
                 </button>
               </div>
@@ -226,7 +226,7 @@ export default function StaffClient({ staff, sickness, training, hours }: {
                     <label className="block text-xs text-gray-600 mb-1">Reason</label>
                     <input value={sicknessForm.reason} onChange={e => setSicknessForm(f => ({ ...f, reason: e.target.value }))} className={input} />
                   </div>
-                  <button onClick={handleAddSickness} disabled={saving} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm rounded-lg disabled:opacity-50">
+                  <button onClick={handleAddSickness} disabled={saving} className="px-4 py-2 bg-blue-500 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50">
                     {saving ? 'Saving…' : 'Save'}
                   </button>
                 </div>
@@ -238,7 +238,7 @@ export default function StaffClient({ staff, sickness, training, hours }: {
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-500">{staffHours.length} entries</span>
-                <button onClick={() => setAddingHours(a => !a)} className="text-xs text-amber-600 hover:text-amber-700">
+                <button onClick={() => setAddingHours(a => !a)} className="text-xs text-blue-800 hover:text-blue-900">
                   {addingHours ? 'Cancel' : '+ Log hours'}
                 </button>
               </div>
@@ -268,7 +268,7 @@ export default function StaffClient({ staff, sickness, training, hours }: {
                     <label className="block text-xs text-gray-600 mb-1">Notes</label>
                     <input value={hoursForm.notes} onChange={e => setHoursForm(f => ({ ...f, notes: e.target.value }))} className={input} />
                   </div>
-                  <button onClick={handleAddHours} disabled={saving} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm rounded-lg disabled:opacity-50">
+                  <button onClick={handleAddHours} disabled={saving} className="px-4 py-2 bg-blue-500 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50">
                     {saving ? 'Saving…' : 'Save'}
                   </button>
                 </div>

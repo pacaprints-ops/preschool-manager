@@ -68,7 +68,7 @@ export default async function RatiosPage() {
                       <div className="text-2xl font-bold text-gray-900">{totalChildren}</div>
                       <div className="text-xs text-gray-500">children</div>
                       <div className="mt-2 pt-2 border-t border-gray-200">
-                        <div className={`text-sm font-semibold ${staffNeeded >= 3 ? 'text-orange-600' : 'text-green-700'}`}>
+                        <div className={`text-sm font-semibold ${staffNeeded >= 3 ? 'text-blue-800' : 'text-green-700'}`}>
                           {staffNeeded} staff needed
                         </div>
                         {count2yr > 0 && <div className="text-xs text-gray-400">{count2yr} × 2yr old</div>}

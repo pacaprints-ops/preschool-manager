@@ -36,7 +36,7 @@ const STATUS_STYLE: Record<string, string> = {
   overdue: 'bg-red-100 text-red-700',
 }
 
-const input = 'border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400'
+const input = 'border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700'
 
 export default function InvoicingClient({
   terms,
@@ -112,7 +112,7 @@ export default function InvoicingClient({
         <button
           onClick={handleGenerate}
           disabled={generating || !selectedTerm || noneSelected}
-          className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm rounded-lg disabled:opacity-50"
+          className="px-4 py-2 bg-blue-800 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50"
         >
           {generating ? 'Generating…' : 'Generate invoices'}
         </button>
@@ -128,7 +128,7 @@ export default function InvoicingClient({
                 {selectedChildIds.size} of {activeChildren.length} selected
               </span>
             </h3>
-            <button onClick={toggleAll} className="text-xs text-amber-600 hover:text-amber-700 font-medium">
+            <button onClick={toggleAll} className="text-xs text-blue-800 hover:text-blue-900 font-medium">
               {allSelected ? 'Deselect all' : 'Select all'}
             </button>
           </div>
@@ -142,8 +142,8 @@ export default function InvoicingClient({
                   onClick={() => toggleChild(child.id)}
                   className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
                     checked
-                      ? 'bg-amber-500 text-white border-amber-500'
-                      : 'bg-white text-gray-600 border-gray-300 hover:border-amber-400'
+                      ? 'bg-blue-800 text-white border-blue-800'
+                      : 'bg-white text-gray-600 border-gray-300 hover:border-blue-600'
                   }`}
                 >
                   {child.firstName} {child.lastName}
@@ -158,7 +158,7 @@ export default function InvoicingClient({
       )}
 
       {terms.length === 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700">
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900">
           No terms set up yet. Go to <strong>Term Dates</strong> to add your first term.
         </div>
       )}
@@ -176,7 +176,7 @@ export default function InvoicingClient({
               <div className="text-xs text-gray-500 mt-1">Received</div>
             </div>
             <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
-              <div className="text-2xl font-bold text-orange-600">{outstanding}</div>
+              <div className="text-2xl font-bold text-blue-800">{outstanding}</div>
               <div className="text-xs text-gray-500 mt-1">Outstanding</div>
             </div>
           </div>
@@ -214,7 +214,7 @@ export default function InvoicingClient({
                       </td>
                       <td className="px-4 py-3 text-right">
                         {inv.consumableConsent
-                          ? <span className="text-amber-700">£{parseFloat(inv.contributionTotal).toFixed(2)}</span>
+                          ? <span className="text-blue-900">£{parseFloat(inv.contributionTotal).toFixed(2)}</span>
                           : <span className="text-gray-400">—</span>}
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -238,7 +238,7 @@ export default function InvoicingClient({
                             href={`/api/invoice/${inv.id}/pdf`}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-xs bg-amber-100 text-amber-700 hover:bg-amber-200 font-medium px-2 py-0.5 rounded"
+                            className="text-xs bg-blue-100 text-blue-900 hover:bg-blue-200 font-medium px-2 py-0.5 rounded"
                           >
                             PDF
                           </a>
@@ -305,7 +305,7 @@ export default function InvoicingClient({
                               <button
                                 onClick={() => saveAdjustment(inv.id)}
                                 disabled={savingAdj}
-                                className="px-3 py-1.5 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 disabled:opacity-50"
+                                className="px-3 py-1.5 bg-blue-800 text-white text-xs rounded hover:bg-blue-900 disabled:opacity-50"
                               >
                                 {savingAdj ? 'Saving…' : 'Save'}
                               </button>

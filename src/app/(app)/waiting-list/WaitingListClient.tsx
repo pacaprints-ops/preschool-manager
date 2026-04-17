@@ -24,7 +24,7 @@ const STATUS_COLOURS: Record<string, string> = {
   accepted: 'bg-green-100 text-green-700',
 }
 
-const input = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400'
+const input = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700'
 
 export default function WaitingListClient({ entries }: { entries: Entry[] }) {
   const [adding, setAdding] = useState(false)
@@ -59,7 +59,7 @@ export default function WaitingListClient({ entries }: { entries: Entry[] }) {
     <div className="space-y-4">
       <button
         onClick={() => setAdding(a => !a)}
-        className="px-4 py-2 text-sm bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors"
+        className="px-4 py-2 text-sm bg-blue-500 hover:bg-blue-900 text-white rounded-lg transition-colors"
       >
         {adding ? 'Cancel' : '+ Add to waiting list'}
       </button>
@@ -111,7 +111,7 @@ export default function WaitingListClient({ entries }: { entries: Entry[] }) {
             <label className="block text-xs text-gray-600 mb-1">Notes</label>
             <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} className={input} />
           </div>
-          <button onClick={handleAdd} disabled={saving} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm rounded-lg disabled:opacity-50">
+          <button onClick={handleAdd} disabled={saving} className="px-4 py-2 bg-blue-500 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50">
             {saving ? 'Saving…' : 'Add to list'}
           </button>
         </div>

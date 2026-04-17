@@ -44,7 +44,7 @@ export default async function ChildrenPage() {
           </Link>
           <Link
             href="/children/new"
-            className="px-4 py-2 text-sm bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors"
+            className="px-4 py-2 text-sm bg-blue-500 hover:bg-blue-900 text-white rounded-lg transition-colors"
           >
             + Add Child
           </Link>
@@ -54,7 +54,7 @@ export default async function ChildrenPage() {
       {activeChildren.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500 text-sm">
           No active children yet.{' '}
-          <Link href="/children/new" className="text-amber-600 hover:underline">Add the first child.</Link>
+          <Link href="/children/new" className="text-blue-800 hover:underline">Add the first child.</Link>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -73,14 +73,14 @@ export default async function ChildrenPage() {
               {activeChildren.map(({ child, keyWorker }) => {
                 const childSess = sessionMap[child.id] ?? []
                 return (
-                  <tr key={child.id} className="hover:bg-amber-50 transition-colors">
+                  <tr key={child.id} className="hover:bg-blue-50 transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-gray-900">
                           {child.firstName} {child.lastName}
                         </span>
                         {child.hasAllergies && (
-                          <span className="inline-flex bg-orange-100 text-orange-700 text-xs px-1.5 py-0.5 rounded-full">⚠ Allergy</span>
+                          <span className="inline-flex bg-blue-100 text-blue-800 text-xs px-1.5 py-0.5 rounded-full">⚠ Allergy</span>
                         )}
                       </div>
                     </td>
@@ -95,7 +95,7 @@ export default async function ChildrenPage() {
                           <span className="text-gray-400">None set</span>
                         ) : (
                           childSess.map(s => (
-                            <span key={s.id} className="bg-amber-100 text-amber-800 text-xs px-1.5 py-0.5 rounded">
+                            <span key={s.id} className="bg-blue-100 text-blue-950 text-xs px-1.5 py-0.5 rounded">
                               {DAY_SHORT[s.day]} {SESSION_SHORT[s.sessionType]}
                             </span>
                           ))
@@ -112,7 +112,7 @@ export default async function ChildrenPage() {
                         return (
                           <div className="flex gap-1 flex-wrap">
                             {f > 0 && <span className="bg-green-100 text-green-700 text-xs px-1.5 py-0.5 rounded-full">{f}F</span>}
-                            {p > 0 && <span className="bg-amber-100 text-amber-700 text-xs px-1.5 py-0.5 rounded-full">{p}P</span>}
+                            {p > 0 && <span className="bg-blue-100 text-blue-900 text-xs px-1.5 py-0.5 rounded-full">{p}P</span>}
                           </div>
                         )
                       })()}
@@ -120,7 +120,7 @@ export default async function ChildrenPage() {
                     <td className="px-4 py-3 text-right">
                       <Link
                         href={`/children/${child.id}`}
-                        className="text-amber-600 hover:text-amber-700 font-medium"
+                        className="text-blue-800 hover:text-blue-900 font-medium"
                       >
                         View →
                       </Link>

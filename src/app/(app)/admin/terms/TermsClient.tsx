@@ -6,7 +6,7 @@ import { addTerm, deleteTerm, updateSessionRates } from './actions'
 type Term = { id: string; name: string; academicYear: string; startDate: string; endDate: string; weekCount: number }
 type SessionConf = { id: string; type: string; label: string; startTime: string; endTime: string; hours: string; hourlyRate2yo: string; hourlyRate34yo: string; contribution: string }
 
-const input = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400'
+const input = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700'
 
 export default function TermsClient({ terms, sessions }: { terms: Term[]; sessions: SessionConf[] }) {
   const [addingTerm, setAddingTerm] = useState(false)
@@ -92,7 +92,7 @@ export default function TermsClient({ terms, sessions }: { terms: Term[]; sessio
                     />
                   </div>
                   <div className="flex gap-1 mt-4">
-                    <button onClick={() => handleSaveSession(s.id)} className="text-xs bg-amber-500 text-white px-2 py-1 rounded">Save</button>
+                    <button onClick={() => handleSaveSession(s.id)} className="text-xs bg-blue-500 text-white px-2 py-1 rounded">Save</button>
                     <button onClick={() => setEditingSession(null)} className="text-xs text-gray-500 px-2 py-1 rounded border border-gray-300">Cancel</button>
                   </div>
                 </div>
@@ -101,7 +101,7 @@ export default function TermsClient({ terms, sessions }: { terms: Term[]; sessio
                   <span>2yo: £{s.hourlyRate2yo}/hr</span>
                   <span>3&4yo: £{s.hourlyRate34yo}/hr</span>
                   <span className="text-gray-500">+ £{s.contribution} consumable</span>
-                  <button onClick={() => setEditingSession(s.id)} className="text-xs text-amber-600 hover:text-amber-700">Edit</button>
+                  <button onClick={() => setEditingSession(s.id)} className="text-xs text-blue-800 hover:text-blue-900">Edit</button>
                 </div>
               )}
             </div>
@@ -116,7 +116,7 @@ export default function TermsClient({ terms, sessions }: { terms: Term[]; sessio
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-gray-700">Academic Terms</h2>
-          <button onClick={() => setAddingTerm(a => !a)} className="text-xs text-amber-600 hover:text-amber-700">
+          <button onClick={() => setAddingTerm(a => !a)} className="text-xs text-blue-800 hover:text-blue-900">
             {addingTerm ? 'Cancel' : '+ Add term'}
           </button>
         </div>
@@ -167,7 +167,7 @@ export default function TermsClient({ terms, sessions }: { terms: Term[]; sessio
                 <input type="number" value={termForm.weekCount} onChange={e => setTermForm(f => ({ ...f, weekCount: e.target.value }))} placeholder="auto" className={input} />
               </div>
             </div>
-            <button onClick={handleAddTerm} disabled={saving} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm rounded-lg disabled:opacity-50">
+            <button onClick={handleAddTerm} disabled={saving} className="px-4 py-2 bg-blue-500 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50">
               {saving ? 'Saving…' : 'Add term'}
             </button>
           </div>

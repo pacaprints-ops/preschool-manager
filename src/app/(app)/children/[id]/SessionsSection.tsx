@@ -68,16 +68,16 @@ export default function SessionsSection({ childId, sessions }: { childId: string
             <p className="text-xs text-gray-500 mt-0.5">
               {fundedCount > 0 && <span className="text-green-700">{fundedCount} funded</span>}
               {fundedCount > 0 && paidCount > 0 && <span className="text-gray-400"> · </span>}
-              {paidCount > 0 && <span className="text-amber-700">{paidCount} paid</span>}
+              {paidCount > 0 && <span className="text-blue-900">{paidCount} paid</span>}
               {sessions.length > 0 && <span className="text-gray-400"> per week</span>}
             </p>
           )}
         </div>
         {!editing ? (
-          <button onClick={() => setEditing(true)} className="text-xs text-amber-600 hover:text-amber-700">Edit</button>
+          <button onClick={() => setEditing(true)} className="text-xs text-blue-800 hover:text-blue-900">Edit</button>
         ) : (
           <div className="flex gap-2">
-            <button onClick={handleSave} disabled={saving} className="text-xs bg-amber-500 text-white px-3 py-1 rounded-lg hover:bg-amber-600 disabled:opacity-50">
+            <button onClick={handleSave} disabled={saving} className="text-xs bg-blue-500 text-white px-3 py-1 rounded-lg hover:bg-blue-900 disabled:opacity-50">
               {saving ? 'Saving…' : 'Save'}
             </button>
             <button onClick={handleCancel} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
@@ -93,10 +93,10 @@ export default function SessionsSection({ childId, sessions }: { childId: string
             {sessions.map(s => (
               <span
                 key={s.id}
-                className={`text-sm px-3 py-1 rounded-full ${s.isFunded ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}
+                className={`text-sm px-3 py-1 rounded-full ${s.isFunded ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-950'}`}
               >
                 {DAY_LABELS[s.day]} {SESSION_LABELS[s.sessionType]}
-                <span className={`ml-1.5 text-xs font-medium ${s.isFunded ? 'text-green-600' : 'text-amber-600'}`}>
+                <span className={`ml-1.5 text-xs font-medium ${s.isFunded ? 'text-green-600' : 'text-blue-800'}`}>
                   {s.isFunded ? 'Funded' : 'Paid'}
                 </span>
               </span>
@@ -129,7 +129,7 @@ export default function SessionsSection({ childId, sessions }: { childId: string
                             type="checkbox"
                             checked={key in selected}
                             onChange={() => toggle(day, session)}
-                            className="rounded w-4 h-4 accent-amber-500"
+                            className="rounded w-4 h-4 accent-blue-800"
                           />
                           {status && (
                             <button
@@ -138,7 +138,7 @@ export default function SessionsSection({ childId, sessions }: { childId: string
                               className={`text-xs px-2 py-0.5 rounded-full font-medium transition-colors ${
                                 status === 'funded'
                                   ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                                  : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                                  : 'bg-blue-100 text-blue-900 hover:bg-blue-200'
                               }`}
                             >
                               {status === 'funded' ? 'Funded' : 'Paid'}

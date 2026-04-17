@@ -162,7 +162,7 @@ export default function RegisterClient({
                       {row.firstName} {row.lastName}
                     </span>
                     {row.hasAllergies && (
-                      <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 text-xs font-medium px-2 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded-full">
                         ⚠ Allergy
                       </span>
                     )}

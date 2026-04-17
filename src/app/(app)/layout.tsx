@@ -23,7 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="bg-amber-600 text-white shadow-sm">
+      <nav className="bg-blue-900 text-white shadow-sm">
         <div className="max-w-6xl mx-auto px-4 flex items-center gap-6 h-14">
           <span className="font-bold text-sm tracking-wide">Winton Pre-School</span>
           <div className="flex items-center gap-1 flex-1">
@@ -31,19 +31,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <Link
                 key={link.href}
                 href={link.href}
-                className="px-3 py-1.5 rounded text-sm hover:bg-amber-700 transition-colors"
+                className="px-3 py-1.5 rounded text-sm hover:bg-blue-700 transition-colors"
               >
                 {link.label}
               </Link>
             ))}
             {isAdmin && (
               <>
-                <span className="mx-2 text-amber-400">|</span>
+                <span className="mx-2 text-blue-300">|</span>
                 {adminLinks.map(link => (
                   <Link
                     key={link.href}
                     href={link.href}
-                    className="px-3 py-1.5 rounded text-sm hover:bg-amber-700 transition-colors"
+                    className="px-3 py-1.5 rounded text-sm hover:bg-blue-700 transition-colors"
                   >
                     {link.label}
                   </Link>
@@ -57,7 +57,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               await signOut({ redirectTo: '/login' })
             }}
           >
-            <button className="text-xs text-amber-200 hover:text-white transition-colors">
+            <button className="text-xs text-blue-200 hover:text-white transition-colors">
               Sign out
             </button>
           </form>

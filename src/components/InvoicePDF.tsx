@@ -1,6 +1,6 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 
-const AMBER = '#d97706'
+const AMBER = '#1e3a8a'
 const DARK = '#111827'
 const GREY = '#6b7280'
 const LIGHT = '#f9fafb'
@@ -33,7 +33,7 @@ const s = StyleSheet.create({
   tableHeaderText: { fontFamily: 'Helvetica-Bold', color: '#ffffff', fontSize: 9 },
   tableRow: { flexDirection: 'row', paddingHorizontal: 10, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
   tableRowAlt: { backgroundColor: LIGHT },
-  tableRowTotal: { flexDirection: 'row', paddingHorizontal: 10, paddingVertical: 8, backgroundColor: '#fffbeb', borderTopWidth: 2, borderTopColor: AMBER },
+  tableRowTotal: { flexDirection: 'row', paddingHorizontal: 10, paddingVertical: 8, backgroundColor: '#eff6ff', borderTopWidth: 2, borderTopColor: AMBER },
   col1: { flex: 1 },
   col2: { width: 80, textAlign: 'right' },
   cellText: { fontSize: 10 },
@@ -49,8 +49,8 @@ const s = StyleSheet.create({
   divider: { borderBottomWidth: 1, borderBottomColor: '#e5e7eb', marginVertical: 14 },
 
   // Consumable note
-  noteBox: { backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a', borderRadius: 4, padding: 10, marginBottom: 14 },
-  noteText: { fontSize: 9, color: '#92400e' },
+  noteBox: { backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 4, padding: 10, marginBottom: 14 },
+  noteText: { fontSize: 9, color: '#1e3a8a' },
 
   // Payment
   paymentTitle: { fontSize: 11, fontFamily: 'Helvetica-Bold', marginBottom: 6, color: DARK },

@@ -121,7 +121,7 @@ export default async function ChildProfilePage({
               {child.firstName} {child.lastName}
             </h1>
             {child.hasAllergies && (
-              <span className="bg-orange-100 text-orange-700 text-xs px-2 py-0.5 rounded-full">⚠ Allergy</span>
+              <span className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full">⚠ Allergy</span>
             )}
             {child.archived && (
               <span className="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded-full">Archived</span>
@@ -133,7 +133,7 @@ export default async function ChildProfilePage({
         </div>
         <Link
           href={`/children/${id}?edit=1`}
-          className="px-4 py-2 text-sm font-medium text-amber-700 border border-amber-300 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors"
+          className="px-4 py-2 text-sm font-medium text-blue-900 border border-blue-300 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
         >
           Edit child info
         </Link>
