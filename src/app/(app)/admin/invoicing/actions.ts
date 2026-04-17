@@ -9,8 +9,8 @@ export async function generateInvoices(termId: string) {
   const term = await db.select().from(terms).where(eq(terms.id, termId)).limit(1)
   if (!term[0]) throw new Error('Term not found')
 
-  const sessions = await db.select().from(sessionConfig)
-  const sessionMap = Object.fromEntries(sessions.map(s => [s.type, s]))
+  const configs = await db.select().from(sessionConfig)
+  const sessionMap = Object.fromEntries(configs.map(s => [s.type, s]))
 
   const activeChildren = await db
     .select({ child: children, session: childSessions })
@@ -32,39 +32,51 @@ export async function generateInvoices(termId: string) {
     ).limit(1)
     if (existing[0]) continue
 
-    const totalSessions = childSess.length * term[0].weekCount
-    let sessionCostPerWeek = 0
-    let contributionPerWeek = 0
+    const weeks = term[0].weekCount
 
-    for (const s of childSess) {
-      const config = sessionMap[s.sessionType]
-      if (config) {
-        sessionCostPerWeek += parseFloat(config.price)
-        contributionPerWeek += parseFloat(config.contribution)
+    // Split into funded and paid sessions
+    const fundedSess = childSess.filter(s => s.isFunded)
+    const paidSess = childSess.filter(s => !s.isFunded)
+
+    // Paid session totals
+    let paidCostPerWeek = 0
+    let paidContribPerWeek = 0
+    for (const s of paidSess) {
+      const conf = sessionMap[s.sessionType]
+      if (conf) {
+        paidCostPerWeek += parseFloat(conf.price)
+        paidContribPerWeek += parseFloat(conf.contribution)
       }
     }
 
-    const sessionCost = sessionCostPerWeek * term[0].weekCount
-    const contributionTotal = contributionPerWeek * term[0].weekCount
-
-    // Funded hours deduction
-    let fundedDeduction = 0
-    if (child.isFunded && child.fundedHours) {
-      const fundedHrsPerWeek = parseFloat(child.fundedHours)
-      const totalFundedHrs = fundedHrsPerWeek * term[0].weekCount
-      // Deduct at £5/hr (placeholder rate — to confirm)
-      fundedDeduction = Math.min(totalFundedHrs * 5, sessionCost)
+    // Funded session totals (informational — shown on invoice but £0 charge)
+    let fundedValuePerWeek = 0
+    let fundedHoursPerWeek = 0
+    for (const s of fundedSess) {
+      const conf = sessionMap[s.sessionType]
+      if (conf) {
+        fundedValuePerWeek += parseFloat(conf.price)
+        fundedHoursPerWeek += parseFloat(conf.hours)
+      }
     }
 
-    const amountDue = Math.max(0, sessionCost + contributionTotal - fundedDeduction)
+    const paidSessionsTotal = paidSess.length * weeks
+    const fundedSessionsTotal = fundedSess.length * weeks
+    const sessionCost = paidCostPerWeek * weeks
+    const contributionTotal = paidContribPerWeek * weeks
+    const fundedValue = fundedValuePerWeek * weeks
+    const fundedHoursTotal = fundedHoursPerWeek * weeks
+    const amountDue = sessionCost + contributionTotal
 
     await db.insert(invoices).values({
       childId: child.id,
       termId,
-      totalSessions,
+      paidSessions: paidSessionsTotal,
+      fundedSessions: fundedSessionsTotal,
+      fundedHoursTotal: fundedHoursTotal.toFixed(2),
       sessionCost: sessionCost.toFixed(2),
       contributionTotal: contributionTotal.toFixed(2),
-      fundedDeduction: fundedDeduction.toFixed(2),
+      fundedValue: fundedValue.toFixed(2),
       amountDue: amountDue.toFixed(2),
       status: 'draft',
       parentEmail: null,

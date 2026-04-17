@@ -10,8 +10,6 @@ type Child = {
   dateOfBirth: string
   address: string | null
   keyWorkerId: string | null
-  isFunded: boolean
-  fundedHours: string | null
   hasAllergies: boolean
   allergies: string | null
   medicalNotes: string | null
@@ -40,8 +38,6 @@ export default function ChildInfoSection({
       dateOfBirth: data.dateOfBirth,
       address: data.address ?? '',
       keyWorkerId: data.keyWorkerId ?? '',
-      isFunded: data.isFunded,
-      fundedHours: data.fundedHours ?? '',
       hasAllergies: data.hasAllergies,
       allergies: data.allergies ?? '',
       medicalNotes: data.medicalNotes ?? '',
@@ -82,10 +78,6 @@ export default function ChildInfoSection({
               {data.collectionPassword || '—'}
             </dd>
           </div>
-          <div>
-            <dt className="text-gray-500">Funded hours</dt>
-            <dd className="text-gray-900">{data.isFunded ? `${data.fundedHours ?? '?'}h/week` : 'Not funded'}</dd>
-          </div>
           <div><dt className="text-gray-500">Allergies</dt><dd className="text-gray-900">{data.hasAllergies ? (data.allergies || 'Yes (no detail)') : 'None'}</dd></div>
           <div><dt className="text-gray-500">Medical notes</dt><dd className="text-gray-900">{data.medicalNotes || '—'}</dd></div>
           <div><dt className="text-gray-500">Photo consent</dt><dd className="text-gray-900">{data.photoConsent ? 'Yes' : 'No'}</dd></div>
@@ -122,19 +114,6 @@ export default function ChildInfoSection({
           <div>
             <label className="block text-xs text-gray-600 mb-1">Collection password</label>
             <input value={data.collectionPassword ?? ''} onChange={e => setData(d => ({ ...d, collectionPassword: e.target.value }))} className={input} />
-          </div>
-          <div className="flex items-center gap-3">
-            <input type="checkbox" id="isFunded" checked={data.isFunded} onChange={e => setData(d => ({ ...d, isFunded: e.target.checked }))} className="rounded" />
-            <label htmlFor="isFunded" className="text-sm text-gray-700">Receiving funded hours</label>
-            {data.isFunded && (
-              <input
-                type="number" min="1" max="30" step="0.5"
-                value={data.fundedHours ?? ''}
-                onChange={e => setData(d => ({ ...d, fundedHours: e.target.value }))}
-                placeholder="hrs/week"
-                className="w-24 border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 bg-white ml-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
-              />
-            )}
           </div>
           <div className="flex items-center gap-3">
             <input type="checkbox" id="hasAllergies" checked={data.hasAllergies} onChange={e => setData(d => ({ ...d, hasAllergies: e.target.checked }))} className="rounded" />

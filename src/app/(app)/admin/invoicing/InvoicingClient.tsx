@@ -8,10 +8,12 @@ type InvoiceRow = {
   invoice: {
     id: string
     termId: string
-    totalSessions: number
+    paidSessions: number
+    fundedSessions: number
+    fundedHoursTotal: string
     sessionCost: string
     contributionTotal: string
-    fundedDeduction: string
+    fundedValue: string
     amountDue: string
     status: 'draft' | 'sent' | 'paid' | 'overdue'
     parentEmail: string | null
@@ -93,10 +95,10 @@ export default function InvoicingClient({ terms, invoices }: { terms: Term[]; in
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Child</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Sessions</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Paid sessions</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Funded sessions</th>
                   <th className="text-right px-4 py-3 font-medium text-gray-600">Session cost</th>
                   <th className="text-right px-4 py-3 font-medium text-gray-600">Contribution</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Funded off</th>
                   <th className="text-right px-4 py-3 font-medium text-gray-600">Amount due</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
                   <th className="px-4 py-3"></th>
@@ -106,12 +108,18 @@ export default function InvoicingClient({ terms, invoices }: { terms: Term[]; in
                 {termInvoices.map(({ invoice: inv, child }) => (
                   <tr key={inv.id} className={inv.status === 'paid' ? 'opacity-60' : ''}>
                     <td className="px-4 py-3 font-medium text-gray-900">{child.firstName} {child.lastName}</td>
-                    <td className="px-4 py-3 text-gray-600">{inv.totalSessions}</td>
+                    <td className="px-4 py-3 text-gray-600">{inv.paidSessions}</td>
+                    <td className="px-4 py-3">
+                      {inv.fundedSessions > 0 ? (
+                        <span className="text-green-700">
+                          {inv.fundedSessions} sessions · {parseFloat(inv.fundedHoursTotal).toFixed(1)}h @ £0
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-right text-gray-700">£{parseFloat(inv.sessionCost).toFixed(2)}</td>
                     <td className="px-4 py-3 text-right text-gray-700">£{parseFloat(inv.contributionTotal).toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right text-blue-600">
-                      {parseFloat(inv.fundedDeduction) > 0 ? `-£${parseFloat(inv.fundedDeduction).toFixed(2)}` : '—'}
-                    </td>
                     <td className="px-4 py-3 text-right font-semibold text-gray-900">£{parseFloat(inv.amountDue).toFixed(2)}</td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[inv.status]}`}>

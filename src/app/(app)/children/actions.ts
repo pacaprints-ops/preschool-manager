@@ -16,8 +16,6 @@ export async function createChild(data: {
   dateOfBirth: string
   address?: string
   keyWorkerId?: string
-  isFunded: boolean
-  fundedHours?: string
   hasAllergies: boolean
   allergies?: string
   medicalNotes?: string
@@ -30,8 +28,6 @@ export async function createChild(data: {
     dateOfBirth: data.dateOfBirth,
     address: data.address || null,
     keyWorkerId: data.keyWorkerId || null,
-    isFunded: data.isFunded,
-    fundedHours: data.fundedHours || null,
     hasAllergies: data.hasAllergies,
     allergies: data.allergies || null,
     medicalNotes: data.medicalNotes || null,
@@ -49,8 +45,6 @@ export async function updateChild(id: string, data: {
   dateOfBirth?: string
   address?: string
   keyWorkerId?: string
-  isFunded?: boolean
-  fundedHours?: string
   hasAllergies?: boolean
   allergies?: string
   medicalNotes?: string
@@ -60,7 +54,6 @@ export async function updateChild(id: string, data: {
   await db.update(children).set({
     ...data,
     keyWorkerId: data.keyWorkerId || null,
-    fundedHours: data.fundedHours || null,
     allergies: data.allergies || null,
     medicalNotes: data.medicalNotes || null,
     collectionPassword: data.collectionPassword || null,
@@ -89,7 +82,7 @@ export async function unarchiveChild(id: string) {
 
 // ─── Sessions ─────────────────────────────────────────────────────────────────
 
-export async function updateChildSessions(childId: string, sessions: { day: string; sessionType: string }[]) {
+export async function updateChildSessions(childId: string, sessions: { day: string; sessionType: string; isFunded: boolean }[]) {
   await db.delete(childSessions).where(eq(childSessions.childId, childId))
   if (sessions.length > 0) {
     await db.insert(childSessions).values(
@@ -97,6 +90,7 @@ export async function updateChildSessions(childId: string, sessions: { day: stri
         childId,
         day: s.day as 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday',
         sessionType: s.sessionType as 'morning' | 'afternoon' | 'full_day',
+        isFunded: s.isFunded,
       }))
     )
   }

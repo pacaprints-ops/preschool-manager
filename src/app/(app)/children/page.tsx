@@ -104,13 +104,18 @@ export default async function ChildrenPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-600">{keyWorker?.name ?? '—'}</td>
                     <td className="px-4 py-3">
-                      {child.isFunded ? (
-                        <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">
-                          {child.fundedHours ?? '?'}h
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">No</span>
-                      )}
+                      {childSess.length === 0 ? (
+                        <span className="text-gray-400">—</span>
+                      ) : (() => {
+                        const f = childSess.filter(s => s.isFunded).length
+                        const p = childSess.filter(s => !s.isFunded).length
+                        return (
+                          <div className="flex gap-1 flex-wrap">
+                            {f > 0 && <span className="bg-green-100 text-green-700 text-xs px-1.5 py-0.5 rounded-full">{f}F</span>}
+                            {p > 0 && <span className="bg-amber-100 text-amber-700 text-xs px-1.5 py-0.5 rounded-full">{p}P</span>}
+                          </div>
+                        )
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <Link

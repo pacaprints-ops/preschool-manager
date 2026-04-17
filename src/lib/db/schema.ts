@@ -67,9 +67,6 @@ export const children = pgTable('children', {
   archivedAt: timestamp('archived_at'),
   // Key worker
   keyWorkerId: uuid('key_worker_id').references(() => users.id),
-  // Funded hours
-  isFunded: boolean('is_funded').notNull().default(false),
-  fundedHours: numeric('funded_hours', { precision: 4, scale: 1 }), // 15 or 30
   // Allergies
   hasAllergies: boolean('has_allergies').notNull().default(false),
   allergies: text('allergies'),
@@ -89,6 +86,7 @@ export const childSessions = pgTable('child_sessions', {
   childId: uuid('child_id').notNull().references(() => children.id),
   day: dayEnum('day').notNull(),
   sessionType: sessionTypeEnum('session_type').notNull(),
+  isFunded: boolean('is_funded').notNull().default(false),
 })
 
 // ─── Emergency contacts ───────────────────────────────────────────────────────
@@ -179,10 +177,12 @@ export const invoices = pgTable('invoices', {
   id: uuid('id').primaryKey().defaultRandom(),
   childId: uuid('child_id').notNull().references(() => children.id),
   termId: uuid('term_id').notNull().references(() => terms.id),
-  totalSessions: integer('total_sessions').notNull(),
+  paidSessions: integer('paid_sessions').notNull().default(0),
+  fundedSessions: integer('funded_sessions').notNull().default(0),
+  fundedHoursTotal: numeric('funded_hours_total', { precision: 8, scale: 2 }).notNull().default('0'),
   sessionCost: numeric('session_cost', { precision: 8, scale: 2 }).notNull(),
   contributionTotal: numeric('contribution_total', { precision: 8, scale: 2 }).notNull(),
-  fundedDeduction: numeric('funded_deduction', { precision: 8, scale: 2 }).notNull().default('0'),
+  fundedValue: numeric('funded_value', { precision: 8, scale: 2 }).notNull().default('0'),
   amountDue: numeric('amount_due', { precision: 8, scale: 2 }).notNull(),
   status: invoiceStatusEnum('status').notNull().default('draft'),
   parentEmail: text('parent_email'),

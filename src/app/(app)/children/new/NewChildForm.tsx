@@ -10,21 +10,26 @@ const SESSIONS = ['morning', 'afternoon', 'full_day'] as const
 const DAY_LABELS: Record<string, string> = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri' }
 const SESSION_LABELS: Record<string, string> = { morning: 'AM', afternoon: 'PM', full_day: 'All Day' }
 
+type SessionStatus = 'paid' | 'funded'
+
 export default function NewChildForm({ staff }: { staff: { id: string; name: string }[] }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [hasAllergies, setHasAllergies] = useState(false)
-  const [isFunded, setIsFunded] = useState(false)
-  const [selectedSessions, setSelectedSessions] = useState<Set<string>>(new Set())
+  const [sessions, setSessions] = useState<Record<string, SessionStatus>>({})
 
-  function toggleSession(day: string, session: string) {
+  function toggle(day: string, session: string) {
     const key = `${day}-${session}`
-    setSelectedSessions(s => {
-      const next = new Set(s)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
+    setSessions(s => {
+      const next = { ...s }
+      if (key in next) delete next[key]
+      else next[key] = 'paid'
       return next
     })
+  }
+
+  function toggleFunded(key: string) {
+    setSessions(s => ({ ...s, [key]: s[key] === 'funded' ? 'paid' : 'funded' }))
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -38,8 +43,6 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
       dateOfBirth: form.get('dateOfBirth') as string,
       address: form.get('address') as string,
       keyWorkerId: form.get('keyWorkerId') as string,
-      isFunded,
-      fundedHours: isFunded ? form.get('fundedHours') as string : undefined,
       hasAllergies,
       allergies: hasAllergies ? form.get('allergies') as string : undefined,
       medicalNotes: form.get('medicalNotes') as string,
@@ -47,12 +50,12 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
       photoConsent: form.get('photoConsent') === 'on',
     })
 
-    if (selectedSessions.size > 0) {
-      const sessions = Array.from(selectedSessions).map(key => {
+    if (Object.keys(sessions).length > 0) {
+      const parsed = Object.entries(sessions).map(([key, status]) => {
         const [day, ...rest] = key.split('-')
-        return { day, sessionType: rest.join('-') }
+        return { day, sessionType: rest.join('-'), isFunded: status === 'funded' }
       })
-      await updateChildSessions(result.id, sessions)
+      await updateChildSessions(result.id, parsed)
     }
 
     router.push(`/children/${result.id}`)
@@ -97,7 +100,8 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
 
       {/* Sessions */}
       <div className="border-t border-gray-100 pt-4">
-        <label className="block text-sm font-medium text-gray-700 mb-3">Sessions attending</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Sessions attending</label>
+        <p className="text-xs text-gray-500 mb-3">Tick a session then click the badge to mark it as Funded or Paid.</p>
         <table className="text-sm border-collapse">
           <thead>
             <tr>
@@ -110,17 +114,33 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
           <tbody>
             {DAYS.map(day => (
               <tr key={day}>
-                <td className="py-1.5 pr-3 text-gray-700 font-medium">{DAY_LABELS[day]}</td>
+                <td className="py-2 pr-3 text-gray-700 font-medium">{DAY_LABELS[day]}</td>
                 {SESSIONS.map(session => {
                   const key = `${day}-${session}`
+                  const status = sessions[key]
                   return (
-                    <td key={session} className="px-4 py-1.5 text-center">
-                      <input
-                        type="checkbox"
-                        checked={selectedSessions.has(key)}
-                        onChange={() => toggleSession(day, session)}
-                        className="rounded w-4 h-4 accent-amber-500"
-                      />
+                    <td key={session} className="px-4 py-2 text-center">
+                      <div className="flex flex-col items-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={key in sessions}
+                          onChange={() => toggle(day, session)}
+                          className="rounded w-4 h-4 accent-amber-500"
+                        />
+                        {status && (
+                          <button
+                            type="button"
+                            onClick={() => toggleFunded(key)}
+                            className={`text-xs px-2 py-0.5 rounded-full font-medium transition-colors ${
+                              status === 'funded'
+                                ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                            }`}
+                          >
+                            {status === 'funded' ? 'Funded' : 'Paid'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   )
                 })}
@@ -128,20 +148,6 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
             ))}
           </tbody>
         </table>
-      </div>
-
-      {/* Funded hours */}
-      <div className="border-t border-gray-100 pt-4 space-y-3">
-        <div className="flex items-center gap-3">
-          <input type="checkbox" id="isFunded" checked={isFunded} onChange={e => setIsFunded(e.target.checked)} className="rounded" />
-          <label htmlFor="isFunded" className="text-sm font-medium text-gray-700">Receiving funded hours</label>
-        </div>
-        {isFunded && (
-          <div className="ml-6">
-            <label className="block text-sm text-gray-600 mb-1">Hours per week</label>
-            <input type="number" name="fundedHours" min="1" max="30" step="0.5" placeholder="e.g. 15" className={`${input} w-40`} />
-          </div>
-        )}
       </div>
 
       {/* Allergies */}
