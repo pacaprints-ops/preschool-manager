@@ -1,14 +1,16 @@
 'use client'
 
 import { useState } from 'react'
-import { addSickness, deleteSickness, addTraining, deleteTraining, addHours } from './actions'
+import { addSickness, deleteSickness, addTraining, deleteTraining, updateWorkingDays } from './actions'
 
-type StaffMember = { id: string; name: string; email: string; role: string }
+type StaffMember = { id: string; name: string; email: string; role: string; workingDays: string }
 type Sickness = { id: string; userId: string; startDate: string; endDate: string | null; reason: string | null; notes: string | null }
 type Training = { id: string; userId: string; trainingName: string; completedDate: string; expiryDate: string | null; notes: string | null }
-type Hours = { id: string; userId: string; date: string; hoursWorked: string; notes: string | null }
 
-const input = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700'
+const ALL_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri'] as const
+const DAY_LABEL: Record<string, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri' }
+
+const inp = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700'
 
 function daysUntilExpiry(dateStr: string | null): number | null {
   if (!dateStr) return null
@@ -16,35 +18,28 @@ function daysUntilExpiry(dateStr: string | null): number | null {
   return Math.ceil(diff / (1000 * 60 * 60 * 24))
 }
 
-export default function StaffClient({ staff, sickness, training, hours }: {
+export default function StaffClient({ staff, sickness, training }: {
   staff: StaffMember[]
   sickness: Sickness[]
   training: Training[]
-  hours: Hours[]
 }) {
   const [selectedStaff, setSelectedStaff] = useState<string>(staff[0]?.id ?? '')
-  const [activeTab, setActiveTab] = useState<'training' | 'sickness' | 'hours'>('training')
+  const [activeTab, setActiveTab] = useState<'rota' | 'training' | 'sickness'>('rota')
   const [saving, setSaving] = useState(false)
   const [addingTraining, setAddingTraining] = useState(false)
   const [addingSickness, setAddingSickness] = useState(false)
-  const [addingHours, setAddingHours] = useState(false)
   const [trainingForm, setTrainingForm] = useState({ trainingName: '', completedDate: '', expiryDate: '', notes: '' })
   const [sicknessForm, setSicknessForm] = useState({ startDate: '', endDate: '', reason: '', notes: '' })
-  const [hoursForm, setHoursForm] = useState({ date: '', hoursWorked: '', notes: '' })
+  const [workingDaysMap, setWorkingDaysMap] = useState<Record<string, string>>(
+    Object.fromEntries(staff.map(s => [s.id, s.workingDays]))
+  )
 
+  const selectedMember = staff.find(s => s.id === selectedStaff)
   const staffSickness = sickness.filter(s => s.userId === selectedStaff)
   const staffTraining = training.filter(t => t.userId === selectedStaff)
-  const staffHours = hours.filter(h => h.userId === selectedStaff)
 
-  // Expiring soon (within 60 days)
-  const expiringTraining = training.filter(t => {
-    const days = daysUntilExpiry(t.expiryDate)
-    return days !== null && days <= 60 && days >= 0
-  })
-  const expiredTraining = training.filter(t => {
-    const days = daysUntilExpiry(t.expiryDate)
-    return days !== null && days < 0
-  })
+  const expiringTraining = training.filter(t => { const d = daysUntilExpiry(t.expiryDate); return d !== null && d <= 60 && d >= 0 })
+  const expiredTraining = training.filter(t => { const d = daysUntilExpiry(t.expiryDate); return d !== null && d < 0 })
 
   async function handleAddTraining() {
     if (!trainingForm.trainingName || !trainingForm.completedDate) return
@@ -64,13 +59,14 @@ export default function StaffClient({ staff, sickness, training, hours }: {
     setAddingSickness(false)
   }
 
-  async function handleAddHours() {
-    if (!hoursForm.date || !hoursForm.hoursWorked) return
-    setSaving(true)
-    await addHours(selectedStaff, hoursForm)
-    setHoursForm({ date: '', hoursWorked: '', notes: '' })
-    setSaving(false)
-    setAddingHours(false)
+  async function toggleDay(userId: string, day: string) {
+    const current = workingDaysMap[userId] ?? 'mon,tue,wed,thu,fri'
+    const days = current.split(',').filter(Boolean)
+    const next = days.includes(day) ? days.filter(d => d !== day) : [...days, day]
+    const ordered = ALL_DAYS.filter(d => next.includes(d))
+    const str = ordered.join(',')
+    setWorkingDaysMap(m => ({ ...m, [userId]: str }))
+    await updateWorkingDays(userId, str)
   }
 
   return (
@@ -81,63 +77,94 @@ export default function StaffClient({ staff, sickness, training, hours }: {
           <div className="space-y-1">
             {expiredTraining.map(t => {
               const member = staff.find(s => s.id === t.userId)
-              return (
-                <div key={t.id} className="text-sm text-red-700">
-                  ⚠ <strong>{member?.name}</strong> — {t.trainingName} expired {Math.abs(daysUntilExpiry(t.expiryDate) ?? 0)} days ago
-                </div>
-              )
+              return <div key={t.id} className="text-sm text-red-700"><strong>{member?.name}</strong> — {t.trainingName} expired {Math.abs(daysUntilExpiry(t.expiryDate) ?? 0)} days ago</div>
             })}
             {expiringTraining.map(t => {
               const member = staff.find(s => s.id === t.userId)
-              const days = daysUntilExpiry(t.expiryDate)
-              return (
-                <div key={t.id} className="text-sm text-blue-800">
-                  ⚡ <strong>{member?.name}</strong> — {t.trainingName} expires in {days} days
-                </div>
-              )
+              return <div key={t.id} className="text-sm text-blue-800"><strong>{member?.name}</strong> — {t.trainingName} expires in {daysUntilExpiry(t.expiryDate)} days</div>
             })}
           </div>
         </div>
       )}
 
+      {/* Team rota overview */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Weekly Rota</h3>
+        <table className="text-sm">
+          <thead>
+            <tr>
+              <th className="text-left pr-8 py-1 text-gray-500 font-medium">Name</th>
+              {ALL_DAYS.map(d => <th key={d} className="px-5 py-1 text-center text-gray-500 font-medium">{DAY_LABEL[d]}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {staff.map(s => {
+              const days = workingDaysMap[s.id]?.split(',').filter(Boolean) ?? []
+              return (
+                <tr key={s.id} className="border-t border-gray-100">
+                  <td className="pr-8 py-2 font-medium text-gray-900">{s.name}</td>
+                  {ALL_DAYS.map(d => (
+                    <td key={d} className="px-5 py-2 text-center text-base">
+                      {days.includes(d) ? <span className="text-green-600 font-bold">✓</span> : <span className="text-gray-300">—</span>}
+                    </td>
+                  ))}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Per-person panel */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="flex border-b border-gray-200">
+        <div className="flex border-b border-gray-200 overflow-x-auto">
           {staff.map(s => (
-            <button
-              key={s.id}
-              onClick={() => setSelectedStaff(s.id)}
-              className={`px-4 py-3 text-sm font-medium transition-colors ${selectedStaff === s.id ? 'bg-blue-50 text-blue-900 border-b-2 border-blue-800' : 'text-gray-600 hover:bg-gray-50'}`}
+            <button key={s.id} onClick={() => setSelectedStaff(s.id)}
+              className={`px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors ${selectedStaff === s.id ? 'bg-blue-50 text-blue-900 border-b-2 border-blue-800' : 'text-gray-600 hover:bg-gray-50'}`}
             >
               {s.name}
-              {training.some(t => {
-                if (t.userId !== s.id) return false
-                const days = daysUntilExpiry(t.expiryDate)
-                return days !== null && days <= 60
-              }) && <span className="ml-1 text-red-500">●</span>}
+              {training.some(t => { if (t.userId !== s.id) return false; const d = daysUntilExpiry(t.expiryDate); return d !== null && d <= 60 }) && <span className="ml-1 text-red-500">•</span>}
             </button>
           ))}
         </div>
 
         <div className="p-4">
           <div className="flex gap-2 mb-4">
-            {(['training', 'sickness', 'hours'] as const).map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${activeTab === tab ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+            {(['rota', 'training', 'sickness'] as const).map(tab => (
+              <button key={tab} onClick={() => setActiveTab(tab)}
+                className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${activeTab === tab ? 'bg-blue-800 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
               >
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>
 
+          {activeTab === 'rota' && selectedMember && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">Days <span className="font-semibold">{selectedMember.name}</span> works. Click to toggle.</p>
+              <div className="flex gap-3 flex-wrap">
+                {ALL_DAYS.map(day => {
+                  const days = workingDaysMap[selectedStaff]?.split(',').filter(Boolean) ?? []
+                  const working = days.includes(day)
+                  return (
+                    <button key={day} onClick={() => toggleDay(selectedStaff, day)}
+                      className={`flex flex-col items-center gap-1 px-5 py-3 rounded-xl border-2 font-medium transition-colors ${working ? 'bg-blue-800 text-white border-blue-800' : 'bg-white text-gray-400 border-gray-200 hover:border-gray-400'}`}
+                    >
+                      <span className="text-sm">{DAY_LABEL[day]}</span>
+                      <span className="text-xs opacity-70">{working ? 'Working' : 'Off'}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="text-xs text-gray-400">Changes save automatically.</p>
+            </div>
+          )}
+
           {activeTab === 'training' && (
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-500">{staffTraining.length} training records</span>
-                <button onClick={() => setAddingTraining(a => !a)} className="text-xs text-blue-800 hover:text-blue-900">
-                  {addingTraining ? 'Cancel' : '+ Add training'}
-                </button>
+                <span className="text-sm text-gray-500">{staffTraining.length} records</span>
+                <button onClick={() => setAddingTraining(a => !a)} className="text-xs text-blue-800 hover:text-blue-900">{addingTraining ? 'Cancel' : '+ Add training'}</button>
               </div>
               {staffTraining.map(t => {
                 const days = daysUntilExpiry(t.expiryDate)
@@ -151,8 +178,7 @@ export default function StaffClient({ staff, sickness, training, hours }: {
                       {t.expiryDate && (
                         <div className={isExpired ? 'text-red-600 font-medium' : isExpiring ? 'text-blue-800' : 'text-gray-500'}>
                           Expires: {new Date(t.expiryDate + 'T12:00:00').toLocaleDateString('en-GB')}
-                          {isExpired && ' — EXPIRED'}
-                          {isExpiring && ` — ${days} days left`}
+                          {isExpired && ' — EXPIRED'}{isExpiring && ` — ${days} days left`}
                         </div>
                       )}
                     </div>
@@ -164,28 +190,14 @@ export default function StaffClient({ staff, sickness, training, hours }: {
               {addingTraining && (
                 <div className="border-t border-gray-100 pt-3 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">Training name *</label>
-                      <input value={trainingForm.trainingName} onChange={e => setTrainingForm(f => ({ ...f, trainingName: e.target.value }))} placeholder="e.g. First Aid, Safeguarding" className={input} />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">Completed date *</label>
-                      <input type="date" value={trainingForm.completedDate} onChange={e => setTrainingForm(f => ({ ...f, completedDate: e.target.value }))} className={input} />
-                    </div>
+                    <div><label className="block text-xs text-gray-600 mb-1">Training name *</label><input value={trainingForm.trainingName} onChange={e => setTrainingForm(f => ({ ...f, trainingName: e.target.value }))} placeholder="e.g. First Aid" className={inp} /></div>
+                    <div><label className="block text-xs text-gray-600 mb-1">Completed date *</label><input type="date" value={trainingForm.completedDate} onChange={e => setTrainingForm(f => ({ ...f, completedDate: e.target.value }))} className={inp} /></div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">Expiry date</label>
-                      <input type="date" value={trainingForm.expiryDate} onChange={e => setTrainingForm(f => ({ ...f, expiryDate: e.target.value }))} className={input} />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">Notes</label>
-                      <input value={trainingForm.notes} onChange={e => setTrainingForm(f => ({ ...f, notes: e.target.value }))} className={input} />
-                    </div>
+                    <div><label className="block text-xs text-gray-600 mb-1">Expiry date</label><input type="date" value={trainingForm.expiryDate} onChange={e => setTrainingForm(f => ({ ...f, expiryDate: e.target.value }))} className={inp} /></div>
+                    <div><label className="block text-xs text-gray-600 mb-1">Notes</label><input value={trainingForm.notes} onChange={e => setTrainingForm(f => ({ ...f, notes: e.target.value }))} className={inp} /></div>
                   </div>
-                  <button onClick={handleAddTraining} disabled={saving} className="px-4 py-2 bg-blue-500 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50">
-                    {saving ? 'Saving…' : 'Save'}
-                  </button>
+                  <button onClick={handleAddTraining} disabled={saving} className="px-4 py-2 bg-blue-800 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50">{saving ? 'Saving...' : 'Save'}</button>
                 </div>
               )}
             </div>
@@ -194,16 +206,14 @@ export default function StaffClient({ staff, sickness, training, hours }: {
           {activeTab === 'sickness' && (
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-500">{staffSickness.length} sickness records</span>
-                <button onClick={() => setAddingSickness(a => !a)} className="text-xs text-blue-800 hover:text-blue-900">
-                  {addingSickness ? 'Cancel' : '+ Log sickness'}
-                </button>
+                <span className="text-sm text-gray-500">{staffSickness.length} records</span>
+                <button onClick={() => setAddingSickness(a => !a)} className="text-xs text-blue-800 hover:text-blue-900">{addingSickness ? 'Cancel' : '+ Log sickness'}</button>
               </div>
               {staffSickness.map(s => (
                 <div key={s.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-lg text-sm">
                   <div>
                     <div className="text-gray-900">{new Date(s.startDate + 'T12:00:00').toLocaleDateString('en-GB')} – {s.endDate ? new Date(s.endDate + 'T12:00:00').toLocaleDateString('en-GB') : 'ongoing'}</div>
-                    {s.reason && <div className="text-gray-500">{s.reason}</div>}
+                    {s.reason && <div className="text-gray-600">{s.reason}</div>}
                     {s.notes && <div className="text-gray-400 text-xs">{s.notes}</div>}
                   </div>
                   <button onClick={() => deleteSickness(s.id)} className="text-xs text-red-400 hover:text-red-600">Remove</button>
@@ -213,64 +223,11 @@ export default function StaffClient({ staff, sickness, training, hours }: {
               {addingSickness && (
                 <div className="border-t border-gray-100 pt-3 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">Start date *</label>
-                      <input type="date" value={sicknessForm.startDate} onChange={e => setSicknessForm(f => ({ ...f, startDate: e.target.value }))} className={input} />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">End date</label>
-                      <input type="date" value={sicknessForm.endDate} onChange={e => setSicknessForm(f => ({ ...f, endDate: e.target.value }))} className={input} />
-                    </div>
+                    <div><label className="block text-xs text-gray-600 mb-1">Start date *</label><input type="date" value={sicknessForm.startDate} onChange={e => setSicknessForm(f => ({ ...f, startDate: e.target.value }))} className={inp} /></div>
+                    <div><label className="block text-xs text-gray-600 mb-1">End date</label><input type="date" value={sicknessForm.endDate} onChange={e => setSicknessForm(f => ({ ...f, endDate: e.target.value }))} className={inp} /></div>
                   </div>
-                  <div>
-                    <label className="block text-xs text-gray-600 mb-1">Reason</label>
-                    <input value={sicknessForm.reason} onChange={e => setSicknessForm(f => ({ ...f, reason: e.target.value }))} className={input} />
-                  </div>
-                  <button onClick={handleAddSickness} disabled={saving} className="px-4 py-2 bg-blue-500 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50">
-                    {saving ? 'Saving…' : 'Save'}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'hours' && (
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-500">{staffHours.length} entries</span>
-                <button onClick={() => setAddingHours(a => !a)} className="text-xs text-blue-800 hover:text-blue-900">
-                  {addingHours ? 'Cancel' : '+ Log hours'}
-                </button>
-              </div>
-              {staffHours.slice(-10).reverse().map(h => (
-                <div key={h.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-sm">
-                  <div>
-                    <span className="text-gray-900">{new Date(h.date + 'T12:00:00').toLocaleDateString('en-GB')}</span>
-                    {h.notes && <span className="text-gray-500 ml-2">— {h.notes}</span>}
-                  </div>
-                  <span className="font-medium text-gray-900">{h.hoursWorked}h</span>
-                </div>
-              ))}
-              {staffHours.length === 0 && !addingHours && <p className="text-sm text-gray-400">No hours logged.</p>}
-              {addingHours && (
-                <div className="border-t border-gray-100 pt-3 space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">Date *</label>
-                      <input type="date" value={hoursForm.date} onChange={e => setHoursForm(f => ({ ...f, date: e.target.value }))} className={input} />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">Hours worked *</label>
-                      <input type="number" step="0.5" value={hoursForm.hoursWorked} onChange={e => setHoursForm(f => ({ ...f, hoursWorked: e.target.value }))} className={input} />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-600 mb-1">Notes</label>
-                    <input value={hoursForm.notes} onChange={e => setHoursForm(f => ({ ...f, notes: e.target.value }))} className={input} />
-                  </div>
-                  <button onClick={handleAddHours} disabled={saving} className="px-4 py-2 bg-blue-500 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50">
-                    {saving ? 'Saving…' : 'Save'}
-                  </button>
+                  <div><label className="block text-xs text-gray-600 mb-1">Reason</label><input value={sicknessForm.reason} onChange={e => setSicknessForm(f => ({ ...f, reason: e.target.value }))} className={inp} /></div>
+                  <button onClick={handleAddSickness} disabled={saving} className="px-4 py-2 bg-blue-800 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50">{saving ? 'Saving...' : 'Save'}</button>
                 </div>
               )}
             </div>

@@ -51,6 +51,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     totalSessionsForTerm,
     adjustmentAmount: parseFloat(invoice.adjustmentAmount),
     adjustmentNote: invoice.adjustmentNote,
+    bankHolidayCount: invoice.bankHolidayCount ?? 0,
     amountDue: parseFloat(invoice.amountDue),
   }
 
@@ -64,7 +65,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   return new Response(new Uint8Array(buffer), {
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Disposition': `inline; filename="${filename}"`,
     },
   })
 }

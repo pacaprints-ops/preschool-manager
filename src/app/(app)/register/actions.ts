@@ -12,13 +12,13 @@ type MarkAttendanceInput = {
   status: 'present' | 'absent' | null
   absenceReason: string | null
   parentContacted: boolean
+  parentContactedDate?: string
   userId: string
 }
 
 export async function markAttendance(input: MarkAttendanceInput) {
-  const { childId, sessionType, date, status, absenceReason, parentContacted, userId } = input
+  const { childId, sessionType, date, status, absenceReason, parentContacted, parentContactedDate, userId } = input
 
-  // Remove entry if status is toggled off
   if (status === null) {
     await db
       .delete(registerEntries)
@@ -33,7 +33,10 @@ export async function markAttendance(input: MarkAttendanceInput) {
     return
   }
 
-  // Upsert the register entry
+  const parentContactedAt = status === 'absent' && parentContacted
+    ? (parentContactedDate ? new Date(parentContactedDate + 'T12:00:00') : new Date())
+    : null
+
   const existing = await db
     .select()
     .from(registerEntries)
@@ -53,7 +56,7 @@ export async function markAttendance(input: MarkAttendanceInput) {
         status,
         absenceReason: status === 'absent' ? absenceReason : null,
         parentContacted: status === 'absent' ? parentContacted : null,
-        parentContactedAt: status === 'absent' && parentContacted ? new Date() : null,
+        parentContactedAt,
         markedById: userId || null,
       })
       .where(eq(registerEntries.id, existing[0].id))
@@ -65,7 +68,7 @@ export async function markAttendance(input: MarkAttendanceInput) {
       status,
       absenceReason: status === 'absent' ? absenceReason : null,
       parentContacted: status === 'absent' ? parentContacted : null,
-      parentContactedAt: status === 'absent' && parentContacted ? new Date() : null,
+      parentContactedAt,
       markedById: userId || null,
     })
   }

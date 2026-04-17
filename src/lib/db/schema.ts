@@ -27,6 +27,7 @@ export const users = pgTable('users', {
   passwordHash: text('password_hash').notNull(),
   name: text('name').notNull(),
   role: roleEnum('role').notNull().default('staff'),
+  workingDays: text('working_days').notNull().default('mon,tue,wed,thu,fri'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
@@ -191,6 +192,7 @@ export const invoices = pgTable('invoices', {
   fundedValue: numeric('funded_value', { precision: 8, scale: 2 }).notNull().default('0'),
   adjustmentAmount: numeric('adjustment_amount', { precision: 8, scale: 2 }).notNull().default('0'),
   adjustmentNote: text('adjustment_note'),
+  bankHolidayCount: integer('bank_holiday_count').notNull().default(0),
   amountDue: numeric('amount_due', { precision: 8, scale: 2 }).notNull(),
   status: invoiceStatusEnum('status').notNull().default('draft'),
   parentEmail: text('parent_email'),

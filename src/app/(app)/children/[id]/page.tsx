@@ -129,14 +129,21 @@ export default async function ChildProfilePage({
           </div>
           <p className="text-sm text-gray-500 mt-0.5">
             DOB: {new Date(child.dateOfBirth + 'T12:00:00').toLocaleDateString('en-GB')}
+            {' · '}{(() => {
+              const dob = new Date(child.dateOfBirth + 'T12:00:00')
+              const now = new Date()
+              let years = now.getFullYear() - dob.getFullYear()
+              let months = now.getMonth() - dob.getMonth()
+              if (months < 0 || (months === 0 && now.getDate() < dob.getDate())) {
+                years--
+                months += 12
+              }
+              if (now.getDate() < dob.getDate()) months--
+              if (months < 0) months += 12
+              return months === 0 ? `${years}y old` : `${years}y ${months}m old`
+            })()}
           </p>
         </div>
-        <Link
-          href={`/children/${id}?edit=1`}
-          className="px-4 py-2 text-sm font-medium text-blue-900 border border-blue-300 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-        >
-          Edit child info
-        </Link>
       </div>
 
       <div className="space-y-4">

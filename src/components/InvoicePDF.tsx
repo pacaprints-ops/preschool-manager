@@ -80,6 +80,7 @@ export type InvoicePDFData = {
   totalSessionsForTerm: number
   adjustmentAmount: number
   adjustmentNote: string | null
+  bankHolidayCount: number
   amountDue: number
 }
 
@@ -110,6 +111,13 @@ export function InvoicePDF({ data }: { data: InvoicePDFData }) {
       sub: `£3.50 × ${data.totalSessionsForTerm} sessions (${data.totalSessionsForTerm / data.weekCount} sessions/week × ${data.weekCount} weeks)`,
       amount: data.contributionTotal,
       green: false,
+    }] : []),
+    ...(data.consumableConsent && data.bankHolidayCount > 0 ? [{
+      label: `Bank holiday closure deduction`,
+      sub: `Pre-school closed on ${data.bankHolidayCount} bank holiday${data.bankHolidayCount === 1 ? '' : 's'} this term — consumable fee not charged`,
+      amount: -(data.bankHolidayCount * 3.50),
+      green: false,
+      italic: false,
     }] : []),
     ...(data.adjustmentAmount !== 0 ? [{
       label: data.adjustmentNote ?? 'Adjustment',

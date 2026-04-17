@@ -5,13 +5,13 @@ import { redirect } from 'next/navigation'
 const navLinks = [
   { href: '/register', label: 'Register' },
   { href: '/children', label: 'Children' },
-  { href: '/waiting-list', label: 'Waiting List' },
+  { href: '/admin/ratios', label: 'Ratios' },
 ]
 
 const adminLinks = [
+  { href: '/waiting-list', label: 'Waiting List' },
   { href: '/admin/invoicing', label: 'Invoicing' },
   { href: '/admin/staff', label: 'Staff' },
-  { href: '/admin/ratios', label: 'Ratios' },
   { href: '/admin/terms', label: 'Term Dates' },
 ]
 

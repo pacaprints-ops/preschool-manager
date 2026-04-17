@@ -15,6 +15,7 @@ type RegisterRow = {
     status: 'present' | 'absent'
     absenceReason: string | null
     parentContacted: boolean | null
+    parentContactedDate: string | null
   } | null
 }
 
@@ -56,48 +57,43 @@ export default function RegisterClient({
   const [parentContacted, setParentContacted] = useState<Record<string, boolean>>(
     Object.fromEntries(rows.map(r => [`${r.childId}-${r.sessionType}`, r.existing?.parentContacted ?? false]))
   )
+  const [parentContactedDates, setParentContactedDates] = useState<Record<string, string>>(
+    Object.fromEntries(rows.map(r => [
+      `${r.childId}-${r.sessionType}`,
+      r.existing?.parentContactedDate ?? todayStr,
+    ]))
+  )
   const [loading, setLoading] = useState<Record<string, boolean>>({})
   const [expandedAbsence, setExpandedAbsence] = useState<Record<string, boolean>>({})
 
   const presentCount = Object.values(statuses).filter(s => s === 'present').length
 
+  async function save(childId: string, sessionType: string, overrides?: { status?: 'present' | 'absent' | null; absenceReason?: string; parentContacted?: boolean; parentContactedDate?: string }) {
+    const key = `${childId}-${sessionType}`
+    await markAttendance({
+      childId,
+      sessionType: sessionType as 'morning' | 'afternoon' | 'full_day',
+      date: todayStr,
+      status: overrides?.status !== undefined ? overrides.status : (statuses[key] ?? null),
+      absenceReason: overrides?.absenceReason !== undefined ? overrides.absenceReason : (absenceReasons[key] || null),
+      parentContacted: overrides?.parentContacted !== undefined ? overrides.parentContacted : (parentContacted[key] || false),
+      parentContactedDate: overrides?.parentContactedDate !== undefined ? overrides.parentContactedDate : (parentContactedDates[key] || todayStr),
+      userId,
+    })
+  }
+
   async function handleMark(childId: string, sessionType: string, status: 'present' | 'absent') {
     const key = `${childId}-${sessionType}`
     setLoading(l => ({ ...l, [key]: true }))
-
     const newStatus = statuses[key] === status ? null : status
     setStatuses(s => ({ ...s, [key]: newStatus }))
-
     if (status === 'absent') {
       setExpandedAbsence(e => ({ ...e, [key]: newStatus === 'absent' }))
     } else {
       setExpandedAbsence(e => ({ ...e, [key]: false }))
     }
-
-    await markAttendance({
-      childId,
-      sessionType: sessionType as 'morning' | 'afternoon' | 'full_day',
-      date: todayStr,
-      status: newStatus,
-      absenceReason: absenceReasons[key] || null,
-      parentContacted: parentContacted[key] || false,
-      userId,
-    })
-
+    await save(childId, sessionType, { status: newStatus })
     setLoading(l => ({ ...l, [key]: false }))
-  }
-
-  async function handleAbsenceUpdate(childId: string, sessionType: string) {
-    const key = `${childId}-${sessionType}`
-    await markAttendance({
-      childId,
-      sessionType: sessionType as 'morning' | 'afternoon' | 'full_day',
-      date: todayStr,
-      status: 'absent',
-      absenceReason: absenceReasons[key] || null,
-      parentContacted: parentContacted[key] || false,
-      userId,
-    })
   }
 
   if (rows.length === 0) {
@@ -145,6 +141,7 @@ export default function RegisterClient({
           const status = statuses[key]
           const isLoading = loading[key]
           const showAbsence = expandedAbsence[key] || status === 'absent'
+          const contacted = parentContacted[key]
 
           return (
             <div
@@ -197,30 +194,52 @@ export default function RegisterClient({
               </div>
 
               {showAbsence && (
-                <div className="px-4 pb-4 space-y-2 border-t border-red-200 pt-3">
+                <div className="px-4 pb-4 space-y-3 border-t border-red-200 pt-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Reason for absence</label>
                     <input
                       type="text"
                       value={absenceReasons[key] ?? ''}
                       onChange={e => setAbsenceReasons(r => ({ ...r, [key]: e.target.value }))}
-                      onBlur={() => handleAbsenceUpdate(row.childId, row.sessionType)}
+                      onBlur={() => save(row.childId, row.sessionType)}
                       placeholder="e.g. Unwell, family holiday..."
                       className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-red-300"
                     />
                   </div>
-                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={parentContacted[key] ?? false}
-                      onChange={e => {
-                        setParentContacted(p => ({ ...p, [key]: e.target.checked }))
-                        setTimeout(() => handleAbsenceUpdate(row.childId, row.sessionType), 0)
-                      }}
-                      className="rounded"
-                    />
-                    Parent contacted
-                  </label>
+
+                  <div className="flex items-start gap-4 flex-wrap">
+                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={contacted ?? false}
+                        onChange={e => {
+                          const checked = e.target.checked
+                          setParentContacted(p => ({ ...p, [key]: checked }))
+                          // If unchecked, reset date to today
+                          if (!checked) setParentContactedDates(d => ({ ...d, [key]: todayStr }))
+                          setTimeout(() => save(row.childId, row.sessionType, { parentContacted: checked }), 0)
+                        }}
+                        className="rounded"
+                      />
+                      Parent contacted
+                    </label>
+
+                    {contacted && (
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs text-gray-500">Date contacted:</label>
+                        <input
+                          type="date"
+                          value={parentContactedDates[key] ?? todayStr}
+                          onChange={e => {
+                            const d = e.target.value
+                            setParentContactedDates(pd => ({ ...pd, [key]: d }))
+                            save(row.childId, row.sessionType, { parentContactedDate: d })
+                          }}
+                          className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 bg-white"
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

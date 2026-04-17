@@ -1,9 +1,14 @@
 'use server'
 
 import { db } from '@/lib/db'
-import { staffSickness, staffHours, staffTraining } from '@/lib/db/schema'
+import { staffSickness, staffHours, staffTraining, users } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
+
+export async function updateWorkingDays(userId: string, days: string) {
+  await db.update(users).set({ workingDays: days }).where(eq(users.id, userId))
+  revalidatePath('/admin/staff')
+}
 
 export async function addSickness(userId: string, data: { startDate: string; endDate?: string; reason?: string; notes?: string }) {
   await db.insert(staffSickness).values({ userId, ...data, endDate: data.endDate || null, reason: data.reason || null, notes: data.notes || null })

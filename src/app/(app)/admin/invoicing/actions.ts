@@ -2,8 +2,9 @@
 
 import { db } from '@/lib/db'
 import { invoices, children, childSessions, sessionConfig, terms } from '@/lib/db/schema'
-import { eq, and, inArray } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
+import { countBankHolidaysInTerm } from '@/lib/bankHolidays'
 
 function ageAtDate(dob: string, refDate: string): number {
   const d = new Date(dob)
@@ -91,7 +92,11 @@ export async function generateInvoices(termId: string, selectedChildIds?: string
     const sessionCost = paidCostPerWeek * weeks
     const fundedValue = fundedValuePerWeek * weeks
     const fundedHoursTotal = fundedHoursPerWeek * weeks
-    const amountDue = sessionCost + contributionTotal
+
+    // Bank holidays: pre-school closed, no consumable fee charged those days
+    const bankHolidayCount = countBankHolidaysInTerm(term[0].startDate, term[0].endDate)
+    const bankHolidayDeduction = child.consumableConsent ? bankHolidayCount * contribution : 0
+    const amountDue = sessionCost + contributionTotal - bankHolidayDeduction
 
     await db.insert(invoices).values({
       childId: child.id,
@@ -107,6 +112,7 @@ export async function generateInvoices(termId: string, selectedChildIds?: string
       fundedValue: fundedValue.toFixed(2),
       adjustmentAmount: '0',
       adjustmentNote: null,
+      bankHolidayCount,
       amountDue: amountDue.toFixed(2),
       status: 'draft',
       parentEmail: null,
@@ -121,7 +127,9 @@ export async function generateInvoices(termId: string, selectedChildIds?: string
 export async function updateAdjustment(id: string, adjustmentAmount: string, adjustmentNote: string) {
   const inv = await db.select().from(invoices).where(eq(invoices.id, id)).limit(1)
   if (!inv[0]) return
-  const base = parseFloat(inv[0].sessionCost) + parseFloat(inv[0].contributionTotal)
+  const contribution = 3.50
+  const bankHolidayDeduction = inv[0].consumableConsent ? (inv[0].bankHolidayCount ?? 0) * contribution : 0
+  const base = parseFloat(inv[0].sessionCost) + parseFloat(inv[0].contributionTotal) - bankHolidayDeduction
   const adj = parseFloat(adjustmentAmount) || 0
   const amountDue = Math.max(0, base + adj).toFixed(2)
   await db.update(invoices).set({ adjustmentAmount: adj.toFixed(2), adjustmentNote: adjustmentNote || null, amountDue }).where(eq(invoices.id, id))

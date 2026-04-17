@@ -13,23 +13,13 @@ export default async function RegisterPage() {
   const dayName = DAYS[today.getDay()] as 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday'
   const todayStr = format(today, 'yyyy-MM-dd')
 
-  // Get all active children attending today
   const attendingToday = await db
-    .select({
-      child: children,
-      session: childSessions,
-    })
+    .select({ child: children, session: childSessions })
     .from(childSessions)
     .innerJoin(children, eq(childSessions.childId, children.id))
-    .where(
-      and(
-        eq(childSessions.day, dayName),
-        eq(children.archived, false)
-      )
-    )
+    .where(and(eq(childSessions.day, dayName), eq(children.archived, false)))
     .orderBy(children.firstName)
 
-  // Get existing register entries for today
   const existingEntries = await db
     .select()
     .from(registerEntries)
@@ -39,15 +29,26 @@ export default async function RegisterPage() {
     existingEntries.map(e => [`${e.childId}-${e.sessionType}`, e])
   )
 
-  const registerRows = attendingToday.map(({ child, session: s }) => ({
-    childId: child.id,
-    firstName: child.firstName,
-    lastName: child.lastName,
-    sessionType: s.sessionType,
-    hasAllergies: child.hasAllergies,
-    allergies: child.allergies,
-    existing: entryMap[`${child.id}-${s.sessionType}`] ?? null,
-  }))
+  const registerRows = attendingToday.map(({ child, session: s }) => {
+    const entry = entryMap[`${child.id}-${s.sessionType}`] ?? null
+    return {
+      childId: child.id,
+      firstName: child.firstName,
+      lastName: child.lastName,
+      sessionType: s.sessionType,
+      hasAllergies: child.hasAllergies,
+      allergies: child.allergies,
+      existing: entry ? {
+        id: entry.id,
+        status: entry.status,
+        absenceReason: entry.absenceReason,
+        parentContacted: entry.parentContacted,
+        parentContactedDate: entry.parentContactedAt
+          ? entry.parentContactedAt.toISOString().slice(0, 10)
+          : null,
+      } : null,
+    }
+  })
 
   const presentCount = existingEntries.filter(e => e.status === 'present').length
 
