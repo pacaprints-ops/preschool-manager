@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { addSickness, deleteSickness, addTraining, deleteTraining, updateWorkingDays } from './actions'
+import { addSickness, deleteSickness, addTraining, deleteTraining, updateWorkingDays, updateDBS } from './actions'
 
-type StaffMember = { id: string; name: string; email: string; role: string; workingDays: string }
+type StaffMember = { id: string; name: string; email: string; role: string; workingDays: string; dbsCertNumber: string | null; dbsIssueDate: string | null; dbsOnUpdateService: boolean }
 type Sickness = { id: string; userId: string; startDate: string; endDate: string | null; reason: string | null; notes: string | null }
 type Training = { id: string; userId: string; trainingName: string; completedDate: string; expiryDate: string | null; notes: string | null }
 
@@ -24,8 +24,16 @@ export default function StaffClient({ staff, sickness, training }: {
   training: Training[]
 }) {
   const [selectedStaff, setSelectedStaff] = useState<string>(staff[0]?.id ?? '')
-  const [activeTab, setActiveTab] = useState<'rota' | 'training' | 'sickness'>('rota')
+  const [activeTab, setActiveTab] = useState<'rota' | 'training' | 'sickness' | 'dbs'>('rota')
   const [saving, setSaving] = useState(false)
+  const [dbsForm, setDbsForm] = useState<Record<string, { dbsCertNumber: string; dbsIssueDate: string; dbsOnUpdateService: boolean }>>(
+    Object.fromEntries(staff.map(s => [s.id, {
+      dbsCertNumber: s.dbsCertNumber ?? '',
+      dbsIssueDate: s.dbsIssueDate ?? '',
+      dbsOnUpdateService: s.dbsOnUpdateService ?? false,
+    }]))
+  )
+  const [savingDbs, setSavingDbs] = useState(false)
   const [addingTraining, setAddingTraining] = useState(false)
   const [addingSickness, setAddingSickness] = useState(false)
   const [trainingForm, setTrainingForm] = useState({ trainingName: '', completedDate: '', expiryDate: '', notes: '' })
@@ -131,12 +139,12 @@ export default function StaffClient({ staff, sickness, training }: {
         </div>
 
         <div className="p-4">
-          <div className="flex gap-2 mb-4">
-            {(['rota', 'training', 'sickness'] as const).map(tab => (
+          <div className="flex gap-2 mb-4 flex-wrap">
+            {(['rota', 'training', 'sickness', 'dbs'] as const).map(tab => (
               <button key={tab} onClick={() => setActiveTab(tab)}
                 className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${activeTab === tab ? 'bg-blue-800 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
               >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab.toUpperCase() === 'DBS' ? 'DBS' : tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>
@@ -204,6 +212,57 @@ export default function StaffClient({ staff, sickness, training }: {
               )}
             </div>
           )}
+
+          {activeTab === 'dbs' && selectedMember && (() => {
+            const form = dbsForm[selectedStaff] ?? { dbsCertNumber: '', dbsIssueDate: '', dbsOnUpdateService: false }
+            const dbsDaysLeft = form.dbsIssueDate
+              ? Math.floor((new Date(form.dbsIssueDate).getTime() + 3 * 365.25 * 24 * 60 * 60 * 1000 - Date.now()) / (1000 * 60 * 60 * 24))
+              : null
+            return (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-500">DBS certificate details for <span className="font-semibold">{selectedMember.name}</span>.</p>
+                {form.dbsIssueDate && dbsDaysLeft !== null && (
+                  <div className={`rounded-lg px-3 py-2 text-sm ${dbsDaysLeft < 0 ? 'bg-red-50 border border-red-200 text-red-700' : dbsDaysLeft <= 90 ? 'bg-amber-50 border border-amber-200 text-amber-700' : 'bg-green-50 border border-green-200 text-green-700'}`}>
+                    {dbsDaysLeft < 0
+                      ? `DBS renewal overdue — issued ${Math.abs(dbsDaysLeft)} days past 3 years`
+                      : dbsDaysLeft <= 90
+                        ? `DBS due for renewal in ${dbsDaysLeft} days`
+                        : `DBS valid — ${dbsDaysLeft} days remaining`}
+                    {form.dbsOnUpdateService && <span className="ml-2 font-medium">(On Update Service)</span>}
+                  </div>
+                )}
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Certificate number</label>
+                    <input value={form.dbsCertNumber} onChange={e => setDbsForm(f => ({ ...f, [selectedStaff]: { ...form, dbsCertNumber: e.target.value } }))} placeholder="e.g. 001234567890" className={inp} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Issue date</label>
+                    <input type="date" value={form.dbsIssueDate} onChange={e => setDbsForm(f => ({ ...f, [selectedStaff]: { ...form, dbsIssueDate: e.target.value } }))} className={inp} />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" id="dbsUpdate" checked={form.dbsOnUpdateService} onChange={e => setDbsForm(f => ({ ...f, [selectedStaff]: { ...form, dbsOnUpdateService: e.target.checked } }))} className="rounded" />
+                    <label htmlFor="dbsUpdate" className="text-sm text-gray-700">Enrolled on DBS Update Service</label>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      setSavingDbs(true)
+                      await updateDBS(selectedStaff, {
+                        dbsCertNumber: form.dbsCertNumber,
+                        dbsIssueDate: form.dbsIssueDate,
+                        dbsOnUpdateService: form.dbsOnUpdateService,
+                      })
+                      setSavingDbs(false)
+                    }}
+                    disabled={savingDbs}
+                    className="px-4 py-2 bg-blue-800 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50"
+                  >
+                    {savingDbs ? 'Saving…' : 'Save DBS record'}
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
 
           {activeTab === 'sickness' && (
             <div className="space-y-3">

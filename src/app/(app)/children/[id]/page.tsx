@@ -1,7 +1,7 @@
 import { db } from '@/lib/db'
 import {
   children, childSessions, emergencyContacts, medications,
-  childNotes, accidentForms, registerEntries, terms, users, childSiblings,
+  childNotes, accidentForms, registerEntries, terms, users, childSiblings, medicineAdministrations,
 } from '@/lib/db/schema'
 import { eq, and, gte, lte, sql, inArray } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
@@ -15,6 +15,7 @@ import NotesSection from './NotesSection'
 import AccidentsSection from './AccidentsSection'
 import SicknessSection from './SicknessSection'
 import SiblingsSection from './SiblingsSection'
+import MedicineAdminSection from './MedicineAdminSection'
 
 export default async function ChildProfilePage({
   params,
@@ -39,6 +40,7 @@ export default async function ChildProfilePage({
     allStaff,
     allTerms,
     siblingLinks,
+    medicineAdmins,
   ] = await Promise.all([
     db.select().from(childSessions).where(eq(childSessions.childId, id)),
     db.select().from(emergencyContacts).where(eq(emergencyContacts.childId, id)),
@@ -60,6 +62,7 @@ export default async function ChildProfilePage({
     db.select({ id: users.id, name: users.name }).from(users),
     db.select().from(terms).orderBy(terms.startDate),
     db.select({ siblingId: childSiblings.siblingId }).from(childSiblings).where(eq(childSiblings.childId, id)),
+    db.select().from(medicineAdministrations).where(eq(medicineAdministrations.childId, id)).orderBy(medicineAdministrations.givenAt),
   ])
 
   // Fetch sibling details
@@ -161,6 +164,11 @@ export default async function ChildProfilePage({
         <SessionsSection childId={id} sessions={childSessionsData} />
         <ContactsSection childId={id} contacts={contacts} />
         <MedicationsSection childId={id} medications={meds} />
+        <MedicineAdminSection
+          childId={id}
+          administrations={medicineAdmins}
+          staff={allStaff}
+        />
         <NotesSection childId={id} notes={notes} userId={session?.user?.id ?? ''} />
         <AccidentsSection childId={id} accidents={accidents} userId={session?.user?.id ?? ''} />
 

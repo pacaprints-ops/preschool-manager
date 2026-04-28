@@ -47,6 +47,7 @@ export default async function RegisterPage() {
       sessionType: s.sessionType,
       hasAllergies: child.hasAllergies,
       allergies: child.allergies,
+      medicalNotes: child.medicalNotes,
       existing: entry ? {
         id: entry.id,
         status: entry.status,

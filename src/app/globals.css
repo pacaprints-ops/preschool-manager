@@ -26,3 +26,11 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@media print {
+  /* Hide nav, buttons, and non-register UI when printing fire register */
+  nav, header, aside,
+  .print\:hidden { display: none !important; }
+  body { background: white; }
+  .print\:block { display: block !important; }
+}

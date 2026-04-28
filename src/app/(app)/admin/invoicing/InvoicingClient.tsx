@@ -126,8 +126,42 @@ export default function InvoicingClient({
     </div>
   )
 
+  const unpaidInvoices = invoices.filter(i => i.invoice.status !== 'paid')
+  const totalOutstanding = unpaidInvoices.reduce((sum, i) => sum + parseFloat(i.invoice.amountDue), 0)
+
+  // Group unpaid by child
+  const unpaidByChild = unpaidInvoices.reduce<Record<string, { child: { id: string; firstName: string; lastName: string }; total: number; terms: string[] }>>((acc, { invoice: inv, child }) => {
+    if (!acc[child.id]) acc[child.id] = { child, total: 0, terms: [] }
+    acc[child.id].total += parseFloat(inv.amountDue)
+    const term = terms.find(t => t.id === inv.termId)
+    if (term) acc[child.id].terms.push(term.name)
+    return acc
+  }, {})
+  const unpaidChildren = Object.values(unpaidByChild).sort((a, b) => b.total - a.total)
+
   return (
     <div className="space-y-4">
+
+      {/* Outstanding balances summary */}
+      {unpaidChildren.length > 0 && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-amber-800">Outstanding balances</h3>
+            <span className="text-sm font-bold text-amber-900">£{totalOutstanding.toFixed(2)} total</span>
+          </div>
+          <div className="space-y-1.5">
+            {unpaidChildren.map(({ child, total, terms: termNames }) => (
+              <div key={child.id} className="flex items-center justify-between text-sm">
+                <div>
+                  <span className="font-medium text-gray-900">{child.firstName} {child.lastName}</span>
+                  <span className="text-xs text-gray-500 ml-2">{termNames.join(', ')}</span>
+                </div>
+                <span className="font-semibold text-amber-800">£{total.toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Term selector + generate */}
       <div className="flex items-center gap-3 flex-wrap">
