@@ -234,6 +234,20 @@ export const staffHours = pgTable('staff_hours', {
   notes: text('notes'),
 })
 
+// ─── Register notes ───────────────────────────────────────────────────────────
+// Day-specific notes per child session (e.g. "Nan collecting today", "Leaving early at 2pm")
+// Separate from attendance entries so a note can be added before the child is marked
+
+export const registerNotes = pgTable('register_notes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  childId: uuid('child_id').notNull().references(() => children.id),
+  date: date('date').notNull(),
+  sessionType: sessionTypeEnum('session_type').notNull(),
+  note: text('note').notNull(),
+  addedById: uuid('added_by_id').references(() => users.id),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
 // ─── Child siblings (junction) ────────────────────────────────────────────────
 
 export const childSiblings = pgTable('child_siblings', {

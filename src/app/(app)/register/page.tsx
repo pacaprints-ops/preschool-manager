@@ -1,6 +1,6 @@
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { children, childSessions, registerEntries } from '@/lib/db/schema'
+import { children, childSessions, registerEntries, registerNotes } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
 import { format } from 'date-fns'
 import RegisterClient from './RegisterClient'
@@ -25,8 +25,17 @@ export default async function RegisterPage() {
     .from(registerEntries)
     .where(eq(registerEntries.date, todayStr))
 
+  const todayNotes = await db
+    .select()
+    .from(registerNotes)
+    .where(eq(registerNotes.date, todayStr))
+
   const entryMap = Object.fromEntries(
     existingEntries.map(e => [`${e.childId}-${e.sessionType}`, e])
+  )
+
+  const noteMap = Object.fromEntries(
+    todayNotes.map(n => [`${n.childId}-${n.sessionType}`, n.note])
   )
 
   const registerRows = attendingToday.map(({ child, session: s }) => {
@@ -47,6 +56,7 @@ export default async function RegisterPage() {
           ? entry.parentContactedAt.toISOString().slice(0, 10)
           : null,
       } : null,
+      sessionNote: noteMap[`${child.id}-${s.sessionType}`] ?? null,
     }
   })
 
@@ -60,6 +70,7 @@ export default async function RegisterPage() {
       presentCount={presentCount}
       totalCount={registerRows.length}
       userId={session?.user?.id ?? ''}
+      initialNotes={noteMap}
     />
   )
 }

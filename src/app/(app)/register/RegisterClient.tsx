@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { markAttendance } from './actions'
+import { markAttendance, saveRegisterNote } from './actions'
 
 type RegisterRow = {
   childId: string
@@ -10,6 +10,7 @@ type RegisterRow = {
   sessionType: 'morning' | 'afternoon' | 'full_day'
   hasAllergies: boolean
   allergies: string | null
+  sessionNote: string | null
   existing: {
     id: string
     status: 'present' | 'absent'
@@ -40,6 +41,7 @@ export default function RegisterClient({
   presentCount: initialPresentCount,
   totalCount,
   userId,
+  initialNotes,
 }: {
   rows: RegisterRow[]
   todayStr: string
@@ -47,6 +49,7 @@ export default function RegisterClient({
   presentCount: number
   totalCount: number
   userId: string
+  initialNotes: Record<string, string>
 }) {
   const [statuses, setStatuses] = useState<Record<string, 'present' | 'absent' | null>>(
     Object.fromEntries(rows.map(r => [`${r.childId}-${r.sessionType}`, r.existing?.status ?? null]))
@@ -65,6 +68,11 @@ export default function RegisterClient({
   )
   const [loading, setLoading] = useState<Record<string, boolean>>({})
   const [expandedAbsence, setExpandedAbsence] = useState<Record<string, boolean>>({})
+  const [notes, setNotes] = useState<Record<string, string>>(
+    Object.fromEntries(rows.map(r => [`${r.childId}-${r.sessionType}`, r.sessionNote ?? '']))
+  )
+  const [showNote, setShowNote] = useState<Record<string, boolean>>({})
+  const [savingNote, setSavingNote] = useState<Record<string, boolean>>({})
 
   const presentCount = Object.values(statuses).filter(s => s === 'present').length
 
@@ -80,6 +88,15 @@ export default function RegisterClient({
       parentContactedDate: overrides?.parentContactedDate !== undefined ? overrides.parentContactedDate : (parentContactedDates[key] || todayStr),
       userId,
     })
+  }
+
+  async function handleSaveNote(childId: string, sessionType: 'morning' | 'afternoon' | 'full_day') {
+    const key = `${childId}-${sessionType}`
+    setSavingNote(s => ({ ...s, [key]: true }))
+    await saveRegisterNote(childId, sessionType, todayStr, notes[key] ?? '', userId)
+    setSavingNote(s => ({ ...s, [key]: false }))
+    // Close the note box if the note was cleared
+    if (!notes[key]?.trim()) setShowNote(s => ({ ...s, [key]: false }))
   }
 
   async function handleMark(childId: string, sessionType: string, status: 'present' | 'absent') {
@@ -142,6 +159,8 @@ export default function RegisterClient({
           const isLoading = loading[key]
           const showAbsence = expandedAbsence[key] || status === 'absent'
           const contacted = parentContacted[key]
+          const hasNote = !!(notes[key]?.trim())
+          const noteOpen = showNote[key] || false
 
           return (
             <div
@@ -154,7 +173,7 @@ export default function RegisterClient({
             >
               <div className="flex items-center gap-3 p-4">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-gray-900">
                       {row.firstName} {row.lastName}
                     </span>
@@ -163,11 +182,30 @@ export default function RegisterClient({
                         ⚠ Allergy
                       </span>
                     )}
+                    {/* Note indicator — shown inline when note exists and box is closed */}
+                    {hasNote && !noteOpen && (
+                      <span className="text-xs text-[#020e2f] bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full font-medium truncate max-w-[180px]">
+                        📋 {notes[key]}
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs text-gray-500 mt-0.5">{SESSION_LABELS[row.sessionType]}</div>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                  {/* Note toggle button */}
+                  <button
+                    onClick={() => setShowNote(s => ({ ...s, [key]: !noteOpen }))}
+                    title={hasNote ? 'View/edit note' : 'Add note'}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                      hasNote
+                        ? 'bg-[#020e2f] text-white'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    {hasNote ? '📋 Note' : '+ Note'}
+                  </button>
+
                   <button
                     onClick={() => handleMark(row.childId, row.sessionType, 'present')}
                     disabled={isLoading}
@@ -192,6 +230,52 @@ export default function RegisterClient({
                   </button>
                 </div>
               </div>
+
+              {/* Note box */}
+              {noteOpen && (
+                <div className="px-4 pb-4 pt-0 border-t border-gray-100">
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5 mt-3">
+                    Session note <span className="text-gray-400 font-normal">(e.g. Nan collecting, leaving early at 2pm)</span>
+                  </label>
+                  <textarea
+                    value={notes[key] ?? ''}
+                    onChange={e => setNotes(n => ({ ...n, [key]: e.target.value }))}
+                    rows={2}
+                    placeholder="Add a note for this session..."
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700 resize-none"
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={() => handleSaveNote(row.childId, row.sessionType)}
+                      disabled={savingNote[key]}
+                      className="px-3 py-1.5 bg-[#020e2f] text-white text-xs rounded-lg hover:bg-[#010922] disabled:opacity-50"
+                    >
+                      {savingNote[key] ? 'Saving…' : 'Save note'}
+                    </button>
+                    {hasNote && (
+                      <button
+                        onClick={() => {
+                          setNotes(n => ({ ...n, [key]: '' }))
+                          handleSaveNote(row.childId, row.sessionType)
+                        }}
+                        className="px-3 py-1.5 text-xs text-red-500 hover:text-red-700"
+                      >
+                        Clear
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setShowNote(s => ({ ...s, [key]: false }))
+                        // Reset unsaved changes
+                        setNotes(n => ({ ...n, [key]: row.sessionNote ?? '' }))
+                      }}
+                      className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {showAbsence && (
                 <div className="px-4 pb-4 space-y-3 border-t border-red-200 pt-3">
