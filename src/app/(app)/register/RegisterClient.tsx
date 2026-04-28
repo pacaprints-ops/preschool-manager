@@ -95,8 +95,7 @@ export default function RegisterClient({
     setSavingNote(s => ({ ...s, [key]: true }))
     await saveRegisterNote(childId, sessionType, todayStr, notes[key] ?? '', userId)
     setSavingNote(s => ({ ...s, [key]: false }))
-    // Close the note box if the note was cleared
-    if (!notes[key]?.trim()) setShowNote(s => ({ ...s, [key]: false }))
+    setShowNote(s => ({ ...s, [key]: false }))
   }
 
   async function handleMark(childId: string, sessionType: string, status: 'present' | 'absent') {
