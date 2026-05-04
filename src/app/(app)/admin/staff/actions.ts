@@ -2,6 +2,7 @@
 
 import { db } from '@/lib/db'
 import { staffSickness, staffHours, staffTraining, users } from '@/lib/db/schema'
+
 import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 
@@ -32,5 +33,14 @@ export async function addTraining(userId: string, data: { trainingName: string; 
 
 export async function deleteTraining(id: string) {
   await db.delete(staffTraining).where(eq(staffTraining.id, id))
+  revalidatePath('/admin/staff')
+}
+
+export async function updateDBS(userId: string, data: { dbsCertNumber: string; dbsIssueDate: string; dbsOnUpdateService: boolean }) {
+  await db.update(users).set({
+    dbsCertNumber: data.dbsCertNumber || null,
+    dbsIssueDate: data.dbsIssueDate || null,
+    dbsOnUpdateService: data.dbsOnUpdateService,
+  }).where(eq(users.id, userId))
   revalidatePath('/admin/staff')
 }

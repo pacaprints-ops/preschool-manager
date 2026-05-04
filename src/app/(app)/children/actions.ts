@@ -3,7 +3,7 @@
 import { db } from '@/lib/db'
 import {
   children, childSessions, emergencyContacts, medications,
-  childNotes, accidentForms, waitingList, childSiblings,
+  childNotes, accidentForms, waitingList, childSiblings, medicineAdministrations,
 } from '@/lib/db/schema'
 import { eq, or, and } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
@@ -215,4 +215,38 @@ export async function removeSibling(childId: string, siblingId: string) {
   )
   revalidatePath(`/children/${childId}`)
   revalidatePath(`/children/${siblingId}`)
+}
+
+export async function addMedicineAdmin(
+  childId: string,
+  data: {
+    medicationName: string
+    dose: string
+    givenAt: string
+    givenById: string
+    givenByName: string
+    witnessedById: string
+    witnessedByName: string
+    parentInformed: boolean
+    notes: string
+  }
+) {
+  await db.insert(medicineAdministrations).values({
+    childId,
+    medicationName: data.medicationName,
+    dose: data.dose,
+    givenAt: new Date(data.givenAt),
+    givenById: data.givenById || null,
+    givenByName: data.givenByName || null,
+    witnessedById: data.witnessedById || null,
+    witnessedByName: data.witnessedByName || null,
+    parentInformed: data.parentInformed,
+    notes: data.notes || null,
+  })
+  revalidatePath(`/children/${childId}`)
+}
+
+export async function deleteMedicineAdmin(id: string, childId: string) {
+  await db.delete(medicineAdministrations).where(eq(medicineAdministrations.id, id))
+  revalidatePath(`/children/${childId}`)
 }

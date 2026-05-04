@@ -5,7 +5,7 @@ import StaffClient from './StaffClient'
 
 export default async function StaffPage() {
   const allStaff = await db
-    .select({ id: users.id, name: users.name, email: users.email, role: users.role, workingDays: users.workingDays })
+    .select({ id: users.id, name: users.name, email: users.email, role: users.role, workingDays: users.workingDays, dbsCertNumber: users.dbsCertNumber, dbsIssueDate: users.dbsIssueDate, dbsOnUpdateService: users.dbsOnUpdateService })
     .from(users)
     .orderBy(users.name)
 
