@@ -5,7 +5,8 @@ import { eq } from 'drizzle-orm'
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const
 const DAY_SHORT: Record<string, string> = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri' }
 const DAY_LABELS: Record<string, string> = { monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday', friday: 'Friday' }
-const SESSION_LABELS: Record<string, string> = { morning: 'AM', afternoon: 'PM', full_day: 'FD' }
+const SESSION_LABELS: Record<string, string> = { morning: 'Morning', afternoon: 'Afternoon', full_day: 'Full Day' }
+const SESSION_SHORT: Record<string, string> = { morning: 'AM', afternoon: 'PM', full_day: 'FD' }
 
 function getAge(dob: string): number {
   const today = new Date()
@@ -39,7 +40,6 @@ export default async function RatiosPage() {
   const currentYear = currentTerm?.academicYear
   const yearTerms = currentYear ? allTerms.filter(t => t.academicYear === currentYear) : []
 
-  // Per-day stats
   const dayData = DAYS.map(day => {
     const rows = activeChildren.filter(r => r.session.day === day)
     const sessionTypes = [...new Set(rows.map(r => r.session.sessionType))] as ('morning' | 'afternoon' | 'full_day')[]
@@ -51,113 +51,151 @@ export default async function RatiosPage() {
     return { day, rows, overall, sessions }
   })
 
-  // Totals: sum of children per day
-  const totalPerDay = dayData.map(d => d.overall.total)
-  const weeklyTotal = totalPerDay.reduce((a, b) => a + b, 0)
-
-  // Unique children enrolled (regardless of how many days they attend)
+  const weeklyTotal = dayData.reduce((a, d) => a + d.overall.total, 0)
   const uniqueChildCount = new Set(activeChildren.map(r => r.child.id)).size
+  const has1to1 = dayData.some(d => d.overall.count1to1 > 0)
 
   return (
-    <div className="max-w-5xl">
-      <h1 className="text-xl font-bold text-gray-800 mb-1">Ratios Overview</h1>
-      <p className="text-sm text-gray-500 mb-6">1:4 for 2-year-olds · 1:8 for 3–4-year-olds · 1:1 for each 1-2-1 child</p>
+    <div className="max-w-5xl space-y-5">
+      <div>
+        <h1 className="text-xl font-bold text-gray-800">Ratios Overview</h1>
+        <p className="text-sm text-gray-500 mt-0.5">1:4 for 2-year-olds · 1:8 for 3–4-year-olds · dedicated staff for each 1-2-1 child</p>
+      </div>
 
-      {/* 5 day widgets */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+      {/* Day widgets */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {dayData.map(({ day, rows, overall, sessions }) => (
-          <div key={day} className={`bg-white rounded-xl border p-3 ${rows.length === 0 ? 'border-gray-100 opacity-50' : 'border-gray-200'}`}>
-            <div className="font-semibold text-gray-800 text-sm mb-2">{DAY_LABELS[day]}</div>
+          <div key={day} className={`rounded-xl border overflow-hidden ${rows.length === 0 ? 'border-gray-100 bg-gray-50' : 'border-gray-200 bg-white'}`}>
+
+            {/* Header */}
+            <div className={`px-3 py-2 border-b ${rows.length === 0 ? 'border-gray-100' : 'border-gray-100 bg-gray-50'}`}>
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{DAY_LABELS[day]}</span>
+            </div>
 
             {rows.length === 0 ? (
-              <p className="text-xs text-gray-400">No children</p>
+              <div className="px-3 py-4 text-center">
+                <p className="text-xs text-gray-400">No children enrolled</p>
+              </div>
             ) : (
-              <>
-                <div className="flex items-baseline gap-1 mb-3">
-                  <span className="text-3xl font-bold text-[#020e2f]">{overall.total}</span>
-                  <span className="text-xs text-gray-500">children</span>
-                </div>
-                <div className="text-sm font-semibold text-gray-700 mb-2">
-                  {overall.staff} staff needed
+              <div className="p-3 space-y-3">
+                {/* Big numbers */}
+                <div className="flex gap-3">
+                  <div className="flex-1 bg-[#020e2f] rounded-lg p-2.5 text-center">
+                    <div className="text-2xl font-bold text-white leading-none">{overall.total}</div>
+                    <div className="text-xs text-blue-200 mt-0.5">children</div>
+                  </div>
+                  <div className="flex-1 bg-gray-100 rounded-lg p-2.5 text-center">
+                    <div className="text-2xl font-bold text-gray-800 leading-none">{overall.staff}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">staff</div>
+                  </div>
                 </div>
 
                 {/* Session breakdown */}
-                <div className="space-y-1 border-t border-gray-100 pt-2">
+                <div className="space-y-1.5">
                   {sessions.map(s => (
-                    <div key={s.st} className="flex justify-between text-xs text-gray-600">
-                      <span className="font-medium text-gray-500">{SESSION_LABELS[s.st]}</span>
-                      <span>{s.total} ch · {s.staff} staff</span>
+                    <div key={s.st} className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-gray-400 w-6">{SESSION_SHORT[s.st]}</span>
+                      <div className="flex-1 mx-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-[#020e2f] rounded-full"
+                          style={{ width: `${overall.total > 0 ? (s.total / overall.total) * 100 : 0}%` }}
+                        />
+                      </div>
+                      <span className="text-xs text-gray-600 w-12 text-right">{s.total} · {s.staff}st</span>
                     </div>
                   ))}
                 </div>
 
-                {/* Age breakdown */}
-                <div className="border-t border-gray-100 pt-2 mt-2 space-y-0.5">
-                  {overall.count2yr > 0 && <div className="text-xs text-gray-400">{overall.count2yr} × 2yr</div>}
-                  {overall.count34yr > 0 && <div className="text-xs text-gray-400">{overall.count34yr} × 3-4yr</div>}
-                  {overall.count1to1 > 0 && <div className="text-xs text-purple-600 font-medium">{overall.count1to1} × 1-2-1</div>}
+                {/* Age tags */}
+                <div className="flex flex-wrap gap-1 pt-1 border-t border-gray-100">
+                  {overall.count2yr > 0 && (
+                    <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">{overall.count2yr} × 2yr</span>
+                  )}
+                  {overall.count34yr > 0 && (
+                    <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-medium">{overall.count34yr} × 3-4yr</span>
+                  )}
+                  {overall.count1to1 > 0 && (
+                    <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium">{overall.count1to1} × 1-2-1</span>
+                  )}
                 </div>
-              </>
+              </div>
             )}
           </div>
         ))}
       </div>
 
       {/* Summary table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100">
+          <h2 className="text-sm font-semibold text-gray-700">Weekly summary</h2>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 w-36"></th>
+            <thead>
+              <tr className="border-b border-gray-100">
+                <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide w-36"></th>
                 {DAYS.map(day => (
-                  <th key={day} className="text-center px-3 py-3 font-medium text-gray-600">{DAY_SHORT[day]}</th>
+                  <th key={day} className="text-center px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">
+                    {DAY_SHORT[day]}
+                  </th>
                 ))}
-                <th className="text-center px-3 py-3 font-medium text-gray-600 border-l border-gray-200">Week</th>
+                <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide border-l border-gray-100">Total</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              <tr className="font-medium">
-                <td className="px-4 py-2.5 text-gray-700">Total children</td>
+            <tbody>
+              <tr className="border-b border-gray-50">
+                <td className="px-4 py-3 text-sm font-semibold text-gray-700">Children</td>
                 {dayData.map(d => (
-                  <td key={d.day} className="text-center px-3 py-2.5 text-gray-900 font-bold">{d.overall.total || '—'}</td>
+                  <td key={d.day} className="text-center px-3 py-3">
+                    <span className={`text-base font-bold ${d.overall.total > 0 ? 'text-[#020e2f]' : 'text-gray-300'}`}>
+                      {d.overall.total || '—'}
+                    </span>
+                  </td>
                 ))}
-                <td className="text-center px-3 py-2.5 text-[#020e2f] font-bold border-l border-gray-200">{weeklyTotal}</td>
+                <td className="text-center px-4 py-3 border-l border-gray-100">
+                  <span className="text-base font-bold text-[#020e2f]">{weeklyTotal}</span>
+                </td>
               </tr>
-              <tr>
-                <td className="px-4 py-2.5 text-gray-600">Staff needed</td>
+              <tr className="border-b border-gray-50">
+                <td className="px-4 py-3 text-sm text-gray-600">Staff needed</td>
                 {dayData.map(d => (
-                  <td key={d.day} className="text-center px-3 py-2.5 text-gray-700">{d.overall.staff || '—'}</td>
+                  <td key={d.day} className="text-center px-3 py-3 text-sm font-medium text-gray-700">
+                    {d.overall.staff || <span className="text-gray-300">—</span>}
+                  </td>
                 ))}
-                <td className="text-center px-3 py-2.5 text-gray-500 border-l border-gray-200">—</td>
+                <td className="text-center px-4 py-3 border-l border-gray-100 text-gray-400 text-sm">—</td>
               </tr>
-              <tr>
-                <td className="px-4 py-2.5 text-gray-500">2yr olds</td>
+              <tr className="border-b border-gray-50">
+                <td className="px-4 py-2.5 text-xs text-blue-600 font-medium">2yr olds</td>
                 {dayData.map(d => (
-                  <td key={d.day} className="text-center px-3 py-2.5 text-gray-500">{d.overall.count2yr || '—'}</td>
+                  <td key={d.day} className="text-center px-3 py-2.5 text-xs text-blue-600">
+                    {d.overall.count2yr || <span className="text-gray-300">—</span>}
+                  </td>
                 ))}
-                <td className="text-center px-3 py-2.5 text-gray-400 border-l border-gray-200">
+                <td className="text-center px-4 py-2.5 border-l border-gray-100 text-xs text-blue-600">
                   {dayData.reduce((s, d) => s + d.overall.count2yr, 0) || '—'}
                 </td>
               </tr>
-              <tr>
-                <td className="px-4 py-2.5 text-gray-500">3–4yr olds</td>
+              <tr className={has1to1 ? 'border-b border-gray-50' : ''}>
+                <td className="px-4 py-2.5 text-xs text-gray-500 font-medium">3–4yr olds</td>
                 {dayData.map(d => (
-                  <td key={d.day} className="text-center px-3 py-2.5 text-gray-500">{d.overall.count34yr || '—'}</td>
+                  <td key={d.day} className="text-center px-3 py-2.5 text-xs text-gray-500">
+                    {d.overall.count34yr || <span className="text-gray-300">—</span>}
+                  </td>
                 ))}
-                <td className="text-center px-3 py-2.5 text-gray-400 border-l border-gray-200">
+                <td className="text-center px-4 py-2.5 border-l border-gray-100 text-xs text-gray-500">
                   {dayData.reduce((s, d) => s + d.overall.count34yr, 0) || '—'}
                 </td>
               </tr>
-              {dayData.some(d => d.overall.count1to1 > 0) && (
+              {has1to1 && (
                 <tr>
-                  <td className="px-4 py-2.5 text-purple-600 font-medium">1-2-1</td>
+                  <td className="px-4 py-2.5 text-xs text-purple-600 font-medium">1-2-1</td>
                   {dayData.map(d => (
-                    <td key={d.day} className="text-center px-3 py-2.5 text-purple-600">
-                      {d.overall.count1to1 || '—'}
+                    <td key={d.day} className="text-center px-3 py-2.5 text-xs text-purple-600">
+                      {d.overall.count1to1 || <span className="text-gray-300">—</span>}
                     </td>
                   ))}
-                  <td className="text-center px-3 py-2.5 text-purple-600 border-l border-gray-200">
+                  <td className="text-center px-4 py-2.5 border-l border-gray-100 text-xs text-purple-600">
                     {dayData.reduce((s, d) => s + d.overall.count1to1, 0)}
                   </td>
                 </tr>
@@ -167,42 +205,40 @@ export default async function RatiosPage() {
         </div>
       </div>
 
-      {/* Term & year totals */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-700">Attendance totals</h3>
-          <p className="text-xs text-gray-400 mt-0.5">Based on current enrolment × term weeks</p>
-        </div>
-        <div className="divide-y divide-gray-100">
-          {currentTerm ? (
-            <div className="px-4 py-3 flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-gray-800">Current term — {currentTerm.name}</div>
-                <div className="text-xs text-gray-400 mt-0.5">{currentTerm.weekCount} weeks</div>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-[#020e2f]">{uniqueChildCount}</div>
-                <div className="text-xs text-gray-400">children enrolled</div>
+      {/* Enrolment totals */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {currentTerm ? (
+          <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-[#020e2f] flex items-center justify-center shrink-0">
+              <span className="text-white font-bold text-lg">{uniqueChildCount}</span>
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-gray-800">Children this term</div>
+              <div className="text-xs text-gray-400 mt-0.5">{currentTerm.name} · {currentTerm.weekCount} weeks</div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 text-sm text-gray-400">
+            No active term — add dates in Term Config.
+          </div>
+        )}
+        {yearTerms.length > 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
+              <span className="text-gray-800 font-bold text-lg">{uniqueChildCount}</span>
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-gray-800">Children this year</div>
+              <div className="text-xs text-gray-400 mt-0.5">
+                {currentYear} · {yearTerms.length} terms · {yearTerms.reduce((s, t) => s + t.weekCount, 0)} weeks
               </div>
             </div>
-          ) : (
-            <div className="px-4 py-3 text-sm text-gray-400">No active term — set term dates in Term Config.</div>
-          )}
-          {yearTerms.length > 0 && (
-            <div className="px-4 py-3 flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-gray-800">School year {currentYear}</div>
-                <div className="text-xs text-gray-400 mt-0.5">
-                  {yearTerms.length} terms · {yearTerms.reduce((s, t) => s + t.weekCount, 0)} weeks total
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-gray-700">{uniqueChildCount}</div>
-                <div className="text-xs text-gray-400">children enrolled</div>
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 text-sm text-gray-400">
+            No terms configured for this year.
+          </div>
+        )}
       </div>
     </div>
   )
