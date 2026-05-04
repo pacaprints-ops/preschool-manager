@@ -1,10 +1,24 @@
 'use client'
 
 import React, { useState } from 'react'
-import { generateInvoices, markInvoicePaid, markInvoiceUnpaid, deleteInvoice, updateAdjustment } from './actions'
+import { generateInvoices, markInvoicePaid, markInvoiceUnpaid, deleteInvoice, updateAdjustment, markLateFeePaid, markLateFeeUnpaid, deleteLateFee } from './actions'
 
 type Term = { id: string; name: string; academicYear: string; weekCount: number }
 type ActiveChild = { id: string; firstName: string; lastName: string }
+type LateFeeRow = {
+  fee: {
+    id: string
+    date: string
+    signedOutAt: Date
+    minutesLate: number
+    ratePerMinute: string
+    totalAmount: string
+    status: string
+    paidAt: Date | null
+    notes: string | null
+  }
+  child: { id: string; firstName: string; lastName: string }
+}
 type InvoiceRow = {
   invoice: {
     id: string
@@ -42,10 +56,12 @@ export default function InvoicingClient({
   terms,
   invoices,
   activeChildren,
+  lateFees,
 }: {
   terms: Term[]
   invoices: InvoiceRow[]
   activeChildren: ActiveChild[]
+  lateFees: LateFeeRow[]
 }) {
   const [selectedTerm, setSelectedTerm] = useState<string>(terms[terms.length - 1]?.id ?? '')
   const [generating, setGenerating] = useState(false)
@@ -141,6 +157,39 @@ export default function InvoicingClient({
 
   return (
     <div className="space-y-4">
+
+      {/* Late pickup fees */}
+      {lateFees.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-700">Late pickup fees</h3>
+            <span className="text-xs text-gray-400">{lateFees.filter(f => f.fee.status === 'unpaid').length} unpaid</span>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {lateFees.map(({ fee, child }) => (
+              <div key={fee.id} className={`flex items-center justify-between px-4 py-3 gap-4 ${fee.status === 'paid' ? 'opacity-50' : ''}`}>
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium text-gray-900 text-sm">{child.firstName} {child.lastName}</span>
+                  <span className="text-xs text-gray-500 ml-2">
+                    {new Date(fee.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                    {' — '}signed out {new Date(fee.signedOutAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                    {' · '}{fee.minutesLate} min late
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-bold text-gray-900">£{parseFloat(fee.totalAmount).toFixed(2)}</span>
+                  {fee.status !== 'paid' ? (
+                    <button onClick={() => markLateFeePaid(fee.id)} className="text-xs text-green-600 hover:text-green-700 font-medium">Mark paid</button>
+                  ) : (
+                    <button onClick={() => markLateFeeUnpaid(fee.id)} className="text-xs text-gray-400 hover:text-gray-600">Unpaid</button>
+                  )}
+                  <button onClick={() => deleteLateFee(fee.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Outstanding balances summary */}
       {unpaidChildren.length > 0 && (

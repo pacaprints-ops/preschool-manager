@@ -28,6 +28,9 @@ export const users = pgTable('users', {
   name: text('name').notNull(),
   role: roleEnum('role').notNull().default('staff'),
   workingDays: text('working_days').notNull().default('mon,tue,wed,thu,fri'),
+  dbsCertNumber: text('dbs_cert_number'),
+  dbsIssueDate: date('dbs_issue_date'),
+  dbsOnUpdateService: boolean('dbs_on_update_service').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
@@ -152,6 +155,7 @@ export const registerEntries = pgTable('register_entries', {
   absenceReason: text('absence_reason'),
   parentContacted: boolean('parent_contacted'),
   parentContactedAt: timestamp('parent_contacted_at'),
+  signedOutAt: timestamp('signed_out_at'),
   markedById: uuid('marked_by_id').references(() => users.id),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
@@ -234,6 +238,24 @@ export const staffHours = pgTable('staff_hours', {
   notes: text('notes'),
 })
 
+// ─── Medicine administration log ─────────────────────────────────────────────
+// Each time a medicine is given to a child, log it here (Ofsted requirement)
+
+export const medicineAdministrations = pgTable('medicine_administrations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  childId: uuid('child_id').notNull().references(() => children.id),
+  medicationName: text('medication_name').notNull(),
+  dose: text('dose').notNull(),
+  givenAt: timestamp('given_at').notNull(),
+  givenById: uuid('given_by_id').references(() => users.id),
+  givenByName: text('given_by_name'),
+  witnessedById: uuid('witnessed_by_id').references(() => users.id),
+  witnessedByName: text('witnessed_by_name'),
+  parentInformed: boolean('parent_informed').notNull().default(false),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
 // ─── Register notes ───────────────────────────────────────────────────────────
 // Day-specific notes per child session (e.g. "Nan collecting today", "Leaving early at 2pm")
 // Separate from attendance entries so a note can be added before the child is marked
@@ -246,6 +268,23 @@ export const registerNotes = pgTable('register_notes', {
   note: text('note').notNull(),
   addedById: uuid('added_by_id').references(() => users.id),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+// ─── Late fee invoices ────────────────────────────────────────────────────────
+// Created automatically when a child is signed out after 15:00
+
+export const lateFeeInvoices = pgTable('late_fee_invoices', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  childId: uuid('child_id').notNull().references(() => children.id),
+  date: date('date').notNull(),
+  signedOutAt: timestamp('signed_out_at').notNull(),
+  minutesLate: integer('minutes_late').notNull(),
+  ratePerMinute: numeric('rate_per_minute', { precision: 6, scale: 2 }).notNull().default('1.00'),
+  totalAmount: numeric('total_amount', { precision: 8, scale: 2 }).notNull(),
+  status: text('status').notNull().default('unpaid'), // 'unpaid' | 'paid'
+  paidAt: timestamp('paid_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
 // ─── Child siblings (junction) ────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 'use server'
 
 import { db } from '@/lib/db'
-import { invoices, children, childSessions, sessionConfig, terms } from '@/lib/db/schema'
+import { invoices, children, childSessions, sessionConfig, terms, lateFeeInvoices } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { countBankHolidaysInTerm } from '@/lib/bankHolidays'
@@ -153,5 +153,20 @@ export async function updateParentEmail(id: string, email: string) {
 
 export async function deleteInvoice(id: string) {
   await db.delete(invoices).where(eq(invoices.id, id))
+  revalidatePath('/admin/invoicing')
+}
+
+export async function markLateFeePaid(id: string) {
+  await db.update(lateFeeInvoices).set({ status: 'paid', paidAt: new Date() }).where(eq(lateFeeInvoices.id, id))
+  revalidatePath('/admin/invoicing')
+}
+
+export async function markLateFeeUnpaid(id: string) {
+  await db.update(lateFeeInvoices).set({ status: 'unpaid', paidAt: null }).where(eq(lateFeeInvoices.id, id))
+  revalidatePath('/admin/invoicing')
+}
+
+export async function deleteLateFee(id: string) {
+  await db.delete(lateFeeInvoices).where(eq(lateFeeInvoices.id, id))
   revalidatePath('/admin/invoicing')
 }

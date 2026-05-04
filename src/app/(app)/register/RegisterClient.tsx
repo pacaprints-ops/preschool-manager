@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { markAttendance, saveRegisterNote } from './actions'
+import { markAttendance, saveRegisterNote, signOutChild, signOutAll } from './actions'
 
 type RegisterRow = {
   childId: string
@@ -18,6 +18,7 @@ type RegisterRow = {
     absenceReason: string | null
     parentContacted: boolean | null
     parentContactedDate: string | null
+    signedOutAt: string | null
   } | null
 }
 
@@ -74,6 +75,11 @@ export default function RegisterClient({
   )
   const [showNote, setShowNote] = useState<Record<string, boolean>>({})
   const [savingNote, setSavingNote] = useState<Record<string, boolean>>({})
+  const [signedOutTimes, setSignedOutTimes] = useState<Record<string, string | null>>(
+    Object.fromEntries(rows.map(r => [`${r.childId}-${r.sessionType}`, r.existing?.signedOutAt ?? null]))
+  )
+  const [signingOut, setSigningOut] = useState<Record<string, boolean>>({})
+  const [endingSession, setEndingSession] = useState(false)
 
   const presentCount = Object.values(statuses).filter(s => s === 'present').length
 
@@ -97,6 +103,44 @@ export default function RegisterClient({
     await saveRegisterNote(childId, sessionType, todayStr, notes[key] ?? '', userId)
     setSavingNote(s => ({ ...s, [key]: false }))
     setShowNote(s => ({ ...s, [key]: false }))
+  }
+
+  function localTimeNow() {
+    const now = new Date()
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  }
+
+  function formatSignOutTime(isoOrLocal: string) {
+    // Handle both stored ISO strings and local "HH:MM" strings
+    if (isoOrLocal.length <= 5) return isoOrLocal
+    const d = new Date(isoOrLocal)
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  }
+
+  function minutesLateFromTime(timeStr: string): number {
+    const [h, m] = timeStr.split(':').map(Number)
+    return Math.max(0, h * 60 + m - 15 * 60)
+  }
+
+  async function handleSignOut(childId: string, sessionType: 'morning' | 'afternoon' | 'full_day') {
+    const key = `${childId}-${sessionType}`
+    const timeStr = localTimeNow()
+    setSigningOut(s => ({ ...s, [key]: true }))
+    setSignedOutTimes(t => ({ ...t, [key]: timeStr }))
+    await signOutChild(childId, sessionType, todayStr, timeStr)
+    setSigningOut(s => ({ ...s, [key]: false }))
+  }
+
+  async function handleEndSession() {
+    setEndingSession(true)
+    const toSignOut = rows
+      .filter(r => statuses[`${r.childId}-${r.sessionType}`] === 'present' && !signedOutTimes[`${r.childId}-${r.sessionType}`])
+      .map(r => ({ childId: r.childId, sessionType: r.sessionType }))
+    toSignOut.forEach(({ childId, sessionType }) => {
+      setSignedOutTimes(t => ({ ...t, [`${childId}-${sessionType}`]: '15:00' }))
+    })
+    await signOutAll(toSignOut, todayStr)
+    setEndingSession(false)
   }
 
   async function handleMark(childId: string, sessionType: string, status: 'present' | 'absent') {
@@ -150,6 +194,14 @@ export default function RegisterClient({
             <div className="text-xs text-gray-500">Expected</div>
           </div>
           <button
+            onClick={handleEndSession}
+            disabled={endingSession}
+            title="Sign out all remaining present children at 3:00pm"
+            className="px-3 py-2 bg-gray-700 text-white text-xs font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 print:hidden"
+          >
+            {endingSession ? 'Signing out…' : 'End session'}
+          </button>
+          <button
             onClick={() => window.print()}
             className="px-3 py-2 bg-[#020e2f] text-white text-xs font-medium rounded-lg hover:bg-[#010922] print:hidden"
             title="Print fire register"
@@ -186,6 +238,9 @@ export default function RegisterClient({
           const contacted = parentContacted[key]
           const hasNote = !!(notes[key]?.trim())
           const noteOpen = showNote[key] || false
+          const signedOut = signedOutTimes[key]
+          const signedOutDisplay = signedOut ? formatSignOutTime(signedOut) : null
+          const lateMinutes = signedOutDisplay ? minutesLateFromTime(signedOutDisplay) : 0
 
           return (
             <div
@@ -218,7 +273,29 @@ export default function RegisterClient({
                   <div className="text-xs text-gray-500 mt-0.5">{SESSION_LABELS[row.sessionType]}</div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  {/* Sign-out display or button — only for present children */}
+                  {status === 'present' && (
+                    signedOutDisplay ? (
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-gray-500">Out: <span className="font-medium text-gray-700">{signedOutDisplay}</span></span>
+                        {lateMinutes > 0 && (
+                          <span className="text-xs bg-red-100 text-red-700 font-medium px-1.5 py-0.5 rounded-full">
+                            +{lateMinutes}min £{lateMinutes.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleSignOut(row.childId, row.sessionType)}
+                        disabled={signingOut[key]}
+                        className="px-3 py-2 rounded-lg text-xs font-medium bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-50 transition-colors"
+                      >
+                        {signingOut[key] ? '…' : 'Sign out'}
+                      </button>
+                    )
+                  )}
+
                   {/* Note toggle button */}
                   <button
                     onClick={() => setShowNote(s => ({ ...s, [key]: !noteOpen }))}

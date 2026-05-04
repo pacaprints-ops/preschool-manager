@@ -56,6 +56,7 @@ export default async function RegisterPage() {
         parentContactedDate: entry.parentContactedAt
           ? entry.parentContactedAt.toISOString().slice(0, 10)
           : null,
+        signedOutAt: entry.signedOutAt ? entry.signedOutAt.toISOString() : null,
       } : null,
       sessionNote: noteMap[`${child.id}-${s.sessionType}`] ?? null,
     }

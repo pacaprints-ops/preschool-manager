@@ -1,8 +1,8 @@
 'use server'
 
 import { db } from '@/lib/db'
-import { registerEntries, registerNotes } from '@/lib/db/schema'
-import { and, eq } from 'drizzle-orm'
+import { registerEntries, registerNotes, lateFeeInvoices } from '@/lib/db/schema'
+import { and, eq, isNull } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 
 type MarkAttendanceInput = {
@@ -73,6 +73,79 @@ export async function markAttendance(input: MarkAttendanceInput) {
     })
   }
 
+  revalidatePath('/register')
+}
+
+// signOutTimeLocal: "HH:MM" in local time (e.g. "14:20" or "15:05")
+export async function signOutChild(
+  childId: string,
+  sessionType: 'morning' | 'afternoon' | 'full_day',
+  date: string,
+  signOutTimeLocal: string,
+) {
+  const signedOutAt = new Date(`${date}T${signOutTimeLocal}:00`)
+
+  await db
+    .update(registerEntries)
+    .set({ signedOutAt })
+    .where(
+      and(
+        eq(registerEntries.childId, childId),
+        eq(registerEntries.sessionType, sessionType),
+        eq(registerEntries.date, date),
+      )
+    )
+
+  // Check for late pickup (after 15:00)
+  const [hours, minutes] = signOutTimeLocal.split(':').map(Number)
+  const totalMins = hours * 60 + minutes
+  const sessionEndMins = 15 * 60
+  const minutesLate = totalMins - sessionEndMins
+
+  if (minutesLate > 0) {
+    const totalAmount = (minutesLate * 1.00).toFixed(2)
+    // Replace any existing late fee for this child on this date
+    await db.delete(lateFeeInvoices).where(
+      and(eq(lateFeeInvoices.childId, childId), eq(lateFeeInvoices.date, date))
+    )
+    await db.insert(lateFeeInvoices).values({
+      childId,
+      date,
+      signedOutAt,
+      minutesLate,
+      ratePerMinute: '1.00',
+      totalAmount,
+    })
+  } else {
+    // Remove any previously created late fee (e.g. if re-signed out earlier)
+    await db.delete(lateFeeInvoices).where(
+      and(eq(lateFeeInvoices.childId, childId), eq(lateFeeInvoices.date, date))
+    )
+  }
+
+  revalidatePath('/register')
+  revalidatePath('/admin/invoicing')
+}
+
+export async function signOutAll(
+  rows: { childId: string; sessionType: 'morning' | 'afternoon' | 'full_day' }[],
+  date: string,
+) {
+  // Sign everyone out at exactly 15:00 — no late fees
+  const signedOutAt = new Date(`${date}T15:00:00`)
+  for (const { childId, sessionType } of rows) {
+    await db
+      .update(registerEntries)
+      .set({ signedOutAt })
+      .where(
+        and(
+          eq(registerEntries.childId, childId),
+          eq(registerEntries.sessionType, sessionType),
+          eq(registerEntries.date, date),
+          isNull(registerEntries.signedOutAt),
+        )
+      )
+  }
   revalidatePath('/register')
 }
 
