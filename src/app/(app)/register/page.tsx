@@ -45,6 +45,8 @@ export default async function RegisterPage() {
       firstName: child.firstName,
       lastName: child.lastName,
       sessionType: s.sessionType,
+      dateOfBirth: child.dateOfBirth,
+      needs1to1: child.needs1to1,
       hasAllergies: child.hasAllergies,
       allergies: child.allergies,
       medicalNotes: child.medicalNotes,

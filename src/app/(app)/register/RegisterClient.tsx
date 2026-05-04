@@ -7,6 +7,8 @@ type RegisterRow = {
   childId: string
   firstName: string
   lastName: string
+  dateOfBirth: string
+  needs1to1: boolean
   sessionType: 'morning' | 'afternoon' | 'full_day'
   hasAllergies: boolean
   allergies: string | null
@@ -26,6 +28,67 @@ const SESSION_LABELS = {
   morning: 'Morning',
   afternoon: 'Afternoon',
   full_day: 'Full Day',
+}
+
+function getAgeYears(dob: string): number {
+  const birth = new Date(dob + 'T12:00:00')
+  const now = new Date()
+  let age = now.getFullYear() - birth.getFullYear()
+  const m = now.getMonth() - birth.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--
+  return age
+}
+
+function calcStaff(subset: RegisterRow[]): { staff: number; count2yr: number; count34yr: number; count1to1: number } {
+  const count1to1 = subset.filter(r => r.needs1to1).length
+  const general = subset.filter(r => !r.needs1to1)
+  const count2yr = general.filter(r => getAgeYears(r.dateOfBirth) === 2).length
+  const count34yr = general.filter(r => getAgeYears(r.dateOfBirth) >= 3).length
+  const staff = Math.ceil(count2yr / 4) + Math.ceil(count34yr / 8) + count1to1
+  return { staff, count2yr, count34yr, count1to1 }
+}
+
+function RatioWidget({ rows, statuses }: {
+  rows: RegisterRow[]
+  statuses: Record<string, 'present' | 'absent' | null>
+}) {
+  const sessionTypes = [...new Set(rows.map(r => r.sessionType))] as ('morning' | 'afternoon' | 'full_day')[]
+
+  return (
+    <div className="mb-4 bg-white rounded-xl border border-gray-200 p-3 print:hidden">
+      <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Staff ratios</div>
+      <div className={`grid gap-3 ${sessionTypes.length === 1 ? 'grid-cols-1' : sessionTypes.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+        {sessionTypes.map(st => {
+          const sessionRows = rows.filter(r => r.sessionType === st)
+          const expected = calcStaff(sessionRows)
+          const presentRows = sessionRows.filter(r => statuses[`${r.childId}-${r.sessionType}`] === 'present')
+          const live = calcStaff(presentRows)
+          return (
+            <div key={st} className="bg-gray-50 rounded-lg p-2.5">
+              <div className="text-xs text-gray-500 font-medium mb-1.5">{SESSION_LABELS[st]}</div>
+              <div className="flex items-end justify-between gap-2">
+                <div>
+                  <div className="text-xs text-gray-400">Expected</div>
+                  <div className="text-lg font-bold text-gray-500">{expected.staff} <span className="text-xs font-normal">staff</span></div>
+                  <div className="text-xs text-gray-400">{sessionRows.length} children</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs text-[#020e2f] font-medium">Live</div>
+                  <div className="text-lg font-bold text-[#020e2f]">{live.staff} <span className="text-xs font-normal">staff</span></div>
+                  <div className="text-xs text-gray-400">{presentRows.length} present</div>
+                </div>
+              </div>
+              {(expected.count1to1 > 0 || live.count1to1 > 0) && (
+                <div className="mt-1.5 pt-1.5 border-t border-gray-200 text-xs text-purple-600 font-medium">
+                  {live.count1to1}/{expected.count1to1} × 1-2-1 present
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 const DAY_LABELS: Record<string, string> = {
@@ -211,23 +274,8 @@ export default function RegisterClient({
         </div>
       </div>
 
-      {/* Allergy & medical brief — shown at top of register */}
-      {rows.some(r => r.hasAllergies || r.medicalNotes) && (
-        <div className="mb-4 bg-amber-50 border border-amber-300 rounded-xl p-3 print:block">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-amber-700 font-semibold text-sm">⚠ Medical brief for today</span>
-          </div>
-          <div className="space-y-1">
-            {rows.filter(r => r.hasAllergies || r.medicalNotes).map(r => (
-              <div key={`${r.childId}-${r.sessionType}`} className="text-sm">
-                <span className="font-medium text-gray-900">{r.firstName} {r.lastName}</span>
-                {r.allergies && <span className="text-amber-800 ml-2">Allergy: {r.allergies}</span>}
-                {r.medicalNotes && <span className="text-gray-600 ml-2">— {r.medicalNotes}</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Ratio widget */}
+      <RatioWidget rows={rows} statuses={statuses} />
 
       <div className="space-y-2">
         {rows.map(row => {
