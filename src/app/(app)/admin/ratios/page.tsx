@@ -5,8 +5,6 @@ import { eq } from 'drizzle-orm'
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const
 const DAY_SHORT: Record<string, string> = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri' }
 const DAY_LABELS: Record<string, string> = { monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday', friday: 'Friday' }
-const SESSION_LABELS: Record<string, string> = { morning: 'Morning', afternoon: 'Afternoon', full_day: 'Full Day' }
-const SESSION_SHORT: Record<string, string> = { morning: 'AM', afternoon: 'PM', full_day: 'FD' }
 
 function getAge(dob: string): number {
   const today = new Date()
@@ -77,9 +75,8 @@ export default async function RatiosPage() {
                 <p className="text-xs text-gray-400">No children enrolled</p>
               </div>
             ) : (
-              <div className="p-3 space-y-3">
-                {/* Big numbers */}
-                <div className="flex gap-3">
+              <div className="p-3">
+                <div className="flex gap-2">
                   <div className="flex-1 bg-[#020e2f] rounded-lg p-2.5 text-center">
                     <div className="text-2xl font-bold text-white leading-none">{overall.total}</div>
                     <div className="text-xs text-blue-200 mt-0.5">children</div>
@@ -88,35 +85,6 @@ export default async function RatiosPage() {
                     <div className="text-2xl font-bold text-gray-800 leading-none">{overall.staff}</div>
                     <div className="text-xs text-gray-500 mt-0.5">staff</div>
                   </div>
-                </div>
-
-                {/* Session breakdown */}
-                <div className="space-y-1.5">
-                  {sessions.map(s => (
-                    <div key={s.st} className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-gray-400 w-6">{SESSION_SHORT[s.st]}</span>
-                      <div className="flex-1 mx-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-[#020e2f] rounded-full"
-                          style={{ width: `${overall.total > 0 ? (s.total / overall.total) * 100 : 0}%` }}
-                        />
-                      </div>
-                      <span className="text-xs text-gray-600 w-12 text-right">{s.total} · {s.staff}st</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Age tags */}
-                <div className="flex flex-wrap gap-1 pt-1 border-t border-gray-100">
-                  {overall.count2yr > 0 && (
-                    <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">{overall.count2yr} × 2yr</span>
-                  )}
-                  {overall.count34yr > 0 && (
-                    <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-medium">{overall.count34yr} × 3-4yr</span>
-                  )}
-                  {overall.count1to1 > 0 && (
-                    <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium">{overall.count1to1} × 1-2-1</span>
-                  )}
                 </div>
               </div>
             )}
