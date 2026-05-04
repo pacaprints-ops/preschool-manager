@@ -55,15 +55,8 @@ export default async function RatiosPage() {
   const totalPerDay = dayData.map(d => d.overall.total)
   const weeklyTotal = totalPerDay.reduce((a, b) => a + b, 0)
 
-  // Term total = sum of (children per day × term weeks) — uses current enrollment
-  const termTotal = currentTerm
-    ? dayData.reduce((sum, d) => sum + d.overall.total * currentTerm.weekCount, 0)
-    : null
-
-  // Year total = same but across all terms in academic year
-  const yearTotal = yearTerms.length > 0
-    ? yearTerms.reduce((sum, t) => sum + dayData.reduce((ds, d) => ds + d.overall.total * t.weekCount, 0), 0)
-    : null
+  // Unique children enrolled (regardless of how many days they attend)
+  const uniqueChildCount = new Set(activeChildren.map(r => r.child.id)).size
 
   return (
     <div className="max-w-5xl">
@@ -181,32 +174,31 @@ export default async function RatiosPage() {
           <p className="text-xs text-gray-400 mt-0.5">Based on current enrolment × term weeks</p>
         </div>
         <div className="divide-y divide-gray-100">
-          {currentTerm && termTotal !== null ? (
+          {currentTerm ? (
             <div className="px-4 py-3 flex items-center justify-between">
               <div>
                 <div className="text-sm font-medium text-gray-800">Current term — {currentTerm.name}</div>
-                <div className="text-xs text-gray-400 mt-0.5">{currentTerm.weekCount} weeks · {weeklyTotal} children/week</div>
+                <div className="text-xs text-gray-400 mt-0.5">{currentTerm.weekCount} weeks</div>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-[#020e2f]">{termTotal.toLocaleString()}</div>
-                <div className="text-xs text-gray-400">child sessions</div>
+                <div className="text-2xl font-bold text-[#020e2f]">{uniqueChildCount}</div>
+                <div className="text-xs text-gray-400">children enrolled</div>
               </div>
             </div>
           ) : (
             <div className="px-4 py-3 text-sm text-gray-400">No active term — set term dates in Term Config.</div>
           )}
-          {yearTotal !== null && yearTerms.length > 0 && (
+          {yearTerms.length > 0 && (
             <div className="px-4 py-3 flex items-center justify-between">
               <div>
                 <div className="text-sm font-medium text-gray-800">School year {currentYear}</div>
                 <div className="text-xs text-gray-400 mt-0.5">
                   {yearTerms.length} terms · {yearTerms.reduce((s, t) => s + t.weekCount, 0)} weeks total
-                  {' · '}{yearTerms.map(t => t.name).join(', ')}
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-gray-700">{yearTotal.toLocaleString()}</div>
-                <div className="text-xs text-gray-400">child sessions</div>
+                <div className="text-2xl font-bold text-gray-700">{uniqueChildCount}</div>
+                <div className="text-xs text-gray-400">children enrolled</div>
               </div>
             </div>
           )}
