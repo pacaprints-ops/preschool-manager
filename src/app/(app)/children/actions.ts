@@ -159,6 +159,8 @@ export async function addAccidentForm(childId: string, reportedById: string, dat
   injury: string
   actionTaken: string
   parentNotified: boolean
+  bodyLocation?: string
+  parentSignature?: string
 }) {
   await db.insert(accidentForms).values({
     childId,
@@ -168,7 +170,17 @@ export async function addAccidentForm(childId: string, reportedById: string, dat
     injury: data.injury,
     actionTaken: data.actionTaken,
     parentNotified: data.parentNotified,
+    bodyLocation: data.bodyLocation ?? null,
+    parentSignature: data.parentSignature || null,
+    parentSignedAt: data.parentSignature ? new Date() : null,
   })
+  revalidatePath(`/children/${childId}`)
+}
+
+export async function signAccidentForm(formId: string, childId: string, signature: string) {
+  await db.update(accidentForms)
+    .set({ parentSignature: signature, parentSignedAt: new Date() })
+    .where(eq(accidentForms.id, formId))
   revalidatePath(`/children/${childId}`)
 }
 

@@ -14,6 +14,7 @@ type RegisterRow = {
   allergies: string | null
   medicalNotes: string | null
   sessionNote: string | null
+  hasUnsignedAccident: boolean
   existing: {
     id: string
     status: 'present' | 'absent'
@@ -309,6 +310,11 @@ export default function RegisterClient({
                     {row.hasAllergies && (
                       <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded-full">
                         ⚠ Allergy
+                      </span>
+                    )}
+                    {row.hasUnsignedAccident && (
+                      <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-xs font-medium px-2 py-0.5 rounded-full">
+                        ✎ Accident unsigned
                       </span>
                     )}
                     {/* Note indicator — shown inline when note exists and box is closed */}

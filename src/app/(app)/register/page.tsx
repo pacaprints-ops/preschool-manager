@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { children, childSessions, registerEntries, registerNotes } from '@/lib/db/schema'
-import { eq, and } from 'drizzle-orm'
+import { children, childSessions, registerEntries, registerNotes, accidentForms } from '@/lib/db/schema'
+import { eq, and, inArray, isNull } from 'drizzle-orm'
 import { format } from 'date-fns'
 import RegisterClient from './RegisterClient'
 
@@ -29,6 +29,18 @@ export default async function RegisterPage() {
     .select()
     .from(registerNotes)
     .where(eq(registerNotes.date, todayStr))
+
+  // Unsigned accident forms for today's children
+  const todayChildIds = [...new Set(attendingToday.map(r => r.child.id))]
+  const unsignedAccidents = todayChildIds.length > 0
+    ? await db.select({ childId: accidentForms.childId })
+        .from(accidentForms)
+        .where(and(
+          inArray(accidentForms.childId, todayChildIds),
+          isNull(accidentForms.parentSignature),
+        ))
+    : []
+  const unsignedChildIds = new Set(unsignedAccidents.map(f => f.childId))
 
   const entryMap = Object.fromEntries(
     existingEntries.map(e => [`${e.childId}-${e.sessionType}`, e])
@@ -61,6 +73,7 @@ export default async function RegisterPage() {
         signedOutAt: entry.signedOutAt ? entry.signedOutAt.toISOString() : null,
       } : null,
       sessionNote: noteMap[`${child.id}-${s.sessionType}`] ?? null,
+      hasUnsignedAccident: unsignedChildIds.has(child.id),
     }
   })
 

@@ -143,6 +143,11 @@ export const accidentForms = pgTable('accident_forms', {
   injury: text('injury').notNull(),
   actionTaken: text('action_taken').notNull(),
   parentNotified: boolean('parent_notified').notNull().default(false),
+  // Body injury location — JSON string: {x: number, y: number} in SVG viewBox coords
+  bodyLocation: text('body_location'),
+  // Parent signature — base64 PNG data URL
+  parentSignature: text('parent_signature'),
+  parentSignedAt: timestamp('parent_signed_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
