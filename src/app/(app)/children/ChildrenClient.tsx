@@ -21,6 +21,17 @@ const SESSION_SHORT: Record<string, string> = {
 }
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const
 
+function calcAge(dob: string): string {
+  const d = new Date(dob + 'T12:00:00')
+  const now = new Date()
+  let years = now.getFullYear() - d.getFullYear()
+  let months = now.getMonth() - d.getMonth()
+  if (months < 0 || (months === 0 && now.getDate() < d.getDate())) { years--; months += 12 }
+  if (now.getDate() < d.getDate()) months--
+  if (months < 0) months += 12
+  return months === 0 ? `${years}y` : `${years}y ${months}m`
+}
+
 export default function ChildrenClient({
   children,
   keyWorkers,
@@ -149,6 +160,7 @@ export default function ChildrenClient({
                     {child.dateOfBirth && (
                       <div className="text-xs text-gray-500 mt-0.5">
                         {new Date(child.dateOfBirth + 'T12:00:00').toLocaleDateString('en-GB')}
+                        <span className="ml-1.5 text-gray-400">({calcAge(child.dateOfBirth)})</span>
                       </div>
                     )}
                   </div>
@@ -187,6 +199,7 @@ export default function ChildrenClient({
                 <tr>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Name</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">DOB</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Age</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Sessions</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Key Worker</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Funded</th>
@@ -208,6 +221,9 @@ export default function ChildrenClient({
                       {child.dateOfBirth
                         ? new Date(child.dateOfBirth + 'T12:00:00').toLocaleDateString('en-GB')
                         : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {child.dateOfBirth ? calcAge(child.dateOfBirth) : '—'}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
