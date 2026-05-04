@@ -7,10 +7,11 @@ const DAY_LABELS: Record<string, string> = { monday: 'Monday', tuesday: 'Tuesday
 const SESSION_LABELS: Record<string, string> = { morning: 'Morning', afternoon: 'Afternoon', full_day: 'Full Day' }
 
 // UK ratios: 1:8 for 3-4yr olds, 1:4 for 2yr olds
-function calcRatio(count2yr: number, count34yr: number) {
+// 1-2-1 children have a dedicated keyworker not counted in general ratio
+function calcRatio(count2yr: number, count34yr: number, count1to1: number) {
   const staffFor2yr = Math.ceil(count2yr / 4)
   const staffFor34yr = Math.ceil(count34yr / 8)
-  return staffFor2yr + staffFor34yr
+  return staffFor2yr + staffFor34yr + count1to1
 }
 
 function getAge(dob: string): number {
@@ -57,10 +58,12 @@ export default async function RatiosPage() {
               <div className="grid grid-cols-3 gap-3">
                 {sessionTypes.map(st => {
                   const sessionChildren = daySessions.filter(r => r.session.sessionType === st)
-                  const count2yr = sessionChildren.filter(r => getAge(r.child.dateOfBirth) === 2).length
-                  const count34yr = sessionChildren.filter(r => getAge(r.child.dateOfBirth) >= 3).length
+                  const count1to1 = sessionChildren.filter(r => r.child.needs1to1).length
+                  const general = sessionChildren.filter(r => !r.child.needs1to1)
+                  const count2yr = general.filter(r => getAge(r.child.dateOfBirth) === 2).length
+                  const count34yr = general.filter(r => getAge(r.child.dateOfBirth) >= 3).length
                   const totalChildren = sessionChildren.length
-                  const staffNeeded = calcRatio(count2yr, count34yr)
+                  const staffNeeded = calcRatio(count2yr, count34yr, count1to1)
 
                   return (
                     <div key={st} className="bg-gray-50 rounded-lg p-3">
@@ -73,6 +76,7 @@ export default async function RatiosPage() {
                         </div>
                         {count2yr > 0 && <div className="text-xs text-gray-400">{count2yr} × 2yr old</div>}
                         {count34yr > 0 && <div className="text-xs text-gray-400">{count34yr} × 3-4yr old</div>}
+                        {count1to1 > 0 && <div className="text-xs text-purple-600 font-medium">{count1to1} × 1-2-1</div>}
                       </div>
                     </div>
                   )

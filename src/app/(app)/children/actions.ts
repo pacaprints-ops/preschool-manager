@@ -22,6 +22,7 @@ export async function createChild(data: {
   collectionPassword?: string
   photoConsent: boolean
   consumableConsent: boolean
+  needs1to1: boolean
 }) {
   const [child] = await db.insert(children).values({
     firstName: data.firstName,
@@ -35,6 +36,7 @@ export async function createChild(data: {
     collectionPassword: data.collectionPassword || null,
     photoConsent: data.photoConsent,
     consumableConsent: data.consumableConsent,
+    needs1to1: data.needs1to1,
   }).returning()
 
   revalidatePath('/children')
@@ -53,6 +55,7 @@ export async function updateChild(id: string, data: {
   collectionPassword?: string
   photoConsent?: boolean
   consumableConsent?: boolean
+  needs1to1?: boolean
 }) {
   await db.update(children).set({
     ...data,

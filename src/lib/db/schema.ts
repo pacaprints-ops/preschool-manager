@@ -83,6 +83,8 @@ export const children = pgTable('children', {
   photoConsent: boolean('photo_consent').notNull().default(false),
   // Consumable fee consent (voluntary £3.50/session)
   consumableConsent: boolean('consumable_consent').notNull().default(false),
+  // 1-2-1 keyworker requirement (EHCP / additional needs)
+  needs1to1: boolean('needs_1to1').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 

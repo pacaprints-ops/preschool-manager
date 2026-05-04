@@ -17,6 +17,7 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
   const [loading, setLoading] = useState(false)
   const [hasAllergies, setHasAllergies] = useState(false)
   const [consumableConsent, setConsumableConsent] = useState(false)
+  const [needs1to1, setNeeds1to1] = useState(false)
   const [sessions, setSessions] = useState<Record<string, SessionStatus>>({})
 
   function toggle(day: string, session: string) {
@@ -50,6 +51,7 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
       collectionPassword: form.get('collectionPassword') as string,
       photoConsent: form.get('photoConsent') === 'on',
       consumableConsent,
+      needs1to1,
     })
 
     if (Object.keys(sessions).length > 0) {
@@ -190,6 +192,24 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
           </label>
           <p className="text-xs text-gray-500 mt-0.5">
             Parent/guardian agrees to the £3.50 per session consumable charge for each day attending.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-start gap-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+        <input
+          type="checkbox"
+          id="needs1to1"
+          checked={needs1to1}
+          onChange={e => setNeeds1to1(e.target.checked)}
+          className="rounded mt-0.5"
+        />
+        <div>
+          <label htmlFor="needs1to1" className="text-sm font-medium text-gray-700">
+            Requires 1-2-1 keyworker
+          </label>
+          <p className="text-xs text-gray-500 mt-0.5">
+            This child has a dedicated keyworker who cannot be counted in the general staff ratio.
           </p>
         </div>
       </div>

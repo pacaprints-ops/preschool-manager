@@ -16,6 +16,7 @@ type Child = {
   collectionPassword: string | null
   photoConsent: boolean
   consumableConsent: boolean
+  needs1to1: boolean
 }
 
 const input = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700'
@@ -45,6 +46,7 @@ export default function ChildInfoSection({
       collectionPassword: data.collectionPassword ?? '',
       photoConsent: data.photoConsent,
       consumableConsent: data.consumableConsent,
+      needs1to1: data.needs1to1,
     })
     setSaving(false)
     setEditing(false)
@@ -89,6 +91,14 @@ export default function ChildInfoSection({
               {data.consumableConsent
                 ? <span className="text-green-700 font-medium">Agreed — £3.50/session</span>
                 : <span className="text-gray-400">Not agreed</span>}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-gray-500">1-2-1 keyworker</dt>
+            <dd>
+              {data.needs1to1
+                ? <span className="bg-purple-100 text-purple-800 font-medium text-xs px-2 py-0.5 rounded-full">Required</span>
+                : <span className="text-gray-400">Not required</span>}
             </dd>
           </div>
         </dl>
@@ -148,6 +158,13 @@ export default function ChildInfoSection({
             <div>
               <label htmlFor="consumableConsent" className="text-sm font-medium text-gray-700">Voluntary consumable fee agreement</label>
               <p className="text-xs text-gray-500 mt-0.5">£3.50 per session charged on invoice if agreed</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+            <input type="checkbox" id="needs1to1" checked={data.needs1to1} onChange={e => setData(d => ({ ...d, needs1to1: e.target.checked }))} className="rounded mt-0.5" />
+            <div>
+              <label htmlFor="needs1to1" className="text-sm font-medium text-gray-700">Requires 1-2-1 keyworker</label>
+              <p className="text-xs text-gray-500 mt-0.5">This child has a dedicated keyworker who cannot be counted in the general staff ratio</p>
             </div>
           </div>
         </div>
