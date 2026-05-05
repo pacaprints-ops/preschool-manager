@@ -299,6 +299,30 @@ export const lateFeeInvoices = pgTable('late_fee_invoices', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
+// ─── Staff daily attendance ───────────────────────────────────────────────────
+
+export const staffDailyAttendance = pgTable('staff_daily_attendance', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  date: date('date').notNull(),
+  userId: uuid('user_id').references(() => users.id),
+  staffName: text('staff_name').notNull(),
+  signedInAt: timestamp('signed_in_at'),
+  signedOutAt: timestamp('signed_out_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
+// ─── Building visitors ────────────────────────────────────────────────────────
+
+export const buildingVisitors = pgTable('building_visitors', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  date: date('date').notNull(),
+  name: text('name').notNull(),
+  organisation: text('organisation'),
+  signedInAt: timestamp('signed_in_at'),
+  signedOutAt: timestamp('signed_out_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
 // ─── Child siblings (junction) ────────────────────────────────────────────────
 
 export const childSiblings = pgTable('child_siblings', {

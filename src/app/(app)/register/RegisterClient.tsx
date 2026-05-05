@@ -1,7 +1,17 @@
 'use client'
 
-import { useState } from 'react'
-import { markAttendance, saveRegisterNote, signOutChild, saveDroppedBy, apply48HourRule, setNoteCompleted as saveNoteCompleted } from './actions'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import {
+  markAttendance, saveRegisterNote, signOutChild, saveDroppedBy,
+  apply48HourRule, setNoteCompleted as saveNoteCompleted,
+} from './actions'
+import {
+  signInStaffForDay, updateStaffSignOut,
+  addVisitor as addVisitorAction, signOutVisitor,
+} from './staff-visitor-actions'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type RegisterRow = {
   childId: string
@@ -28,10 +38,42 @@ type RegisterRow = {
   } | null
 }
 
+type StaffEntry = {
+  id: string
+  staffName: string
+  signedInAt: string | null
+  signedOutAt: string | null
+}
+
+type VisitorEntry = {
+  id: string
+  name: string
+  organisation: string | null
+  signedInAt: string | null
+  signedOutAt: string | null
+}
+
+type StaffUser = {
+  id: string
+  name: string
+  workingDays: string
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 const SESSION_LABELS = {
   morning: 'Morning',
   afternoon: 'Afternoon',
   full_day: 'Full Day',
+}
+
+const DAY_LABELS: Record<string, string> = {
+  monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday',
+  thursday: 'Thursday', friday: 'Friday',
+}
+
+const DAY_ABBR: Record<string, string> = {
+  monday: 'mon', tuesday: 'tue', wednesday: 'wed', thursday: 'thu', friday: 'fri',
 }
 
 function getAgeYears(dob: string): number {
@@ -51,6 +93,19 @@ function calcStaff(subset: RegisterRow[]): { staff: number; count2yr: number; co
   const staff = Math.ceil(count2yr / 4) + Math.ceil(count34yr / 8) + count1to1
   return { staff, count2yr, count34yr, count1to1 }
 }
+
+function fmtTime(iso: string | null): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+function localTimeNow(): string {
+  const now = new Date()
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+}
+
+// ─── Ratio Widget ──────────────────────────────────────────────────────────────
 
 function RatioWidget({ rows, statuses }: {
   rows: RegisterRow[]
@@ -112,13 +167,440 @@ function RatioWidget({ rows, statuses }: {
   )
 }
 
-const DAY_LABELS: Record<string, string> = {
-  monday: 'Monday',
-  tuesday: 'Tuesday',
-  wednesday: 'Wednesday',
-  thursday: 'Thursday',
-  friday: 'Friday',
+// ─── Staff Sign-In Modal ───────────────────────────────────────────────────────
+
+function StaffSignInModal({ allStaff, dayName, todayStr }: {
+  allStaff: StaffUser[]
+  dayName: string
+  todayStr: string
+}) {
+  const todayAbbr = DAY_ABBR[dayName] ?? ''
+  const now = localTimeNow()
+
+  const [entries, setEntries] = useState<Record<string, { checked: boolean; timeIn: string; timeOut: string }>>(
+    Object.fromEntries(allStaff.map(s => [s.id, {
+      checked: s.workingDays.split(',').includes(todayAbbr),
+      timeIn: now,
+      timeOut: '',
+    }]))
+  )
+  const [saving, setSaving] = useState(false)
+
+  async function handleSubmit() {
+    setSaving(true)
+    const toSave = allStaff
+      .filter(s => entries[s.id]?.checked)
+      .map(s => ({
+        userId: s.id,
+        staffName: s.name,
+        signedInAt: entries[s.id].timeIn,
+        signedOutAt: entries[s.id].timeOut || undefined,
+      }))
+    await signInStaffForDay(todayStr, toSave)
+    window.location.reload()
+  }
+
+  const dateLabel = new Date(todayStr + 'T12:00:00').toLocaleDateString('en-GB', {
+    weekday: 'long', day: 'numeric', month: 'long',
+  })
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col">
+        <div className="p-5 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-800">Staff Sign-In</h2>
+          <p className="text-sm text-gray-500 mt-0.5">{dateLabel}</p>
+        </div>
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {allStaff.map(staff => {
+            const e = entries[staff.id]
+            return (
+              <div key={staff.id} className="flex items-start gap-3 pb-4 border-b border-gray-50 last:border-0 last:pb-0">
+                <input
+                  type="checkbox"
+                  checked={e.checked}
+                  onChange={ev => setEntries(prev => ({ ...prev, [staff.id]: { ...prev[staff.id], checked: ev.target.checked } }))}
+                  className="mt-1 rounded"
+                />
+                <div className="flex-1">
+                  <span className={`text-sm font-medium block mb-2 ${e.checked ? 'text-gray-900' : 'text-gray-400'}`}>
+                    {staff.name}
+                  </span>
+                  {e.checked && (
+                    <div className="flex gap-4">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-gray-400 w-5">In</span>
+                        <input
+                          type="time"
+                          value={e.timeIn}
+                          onChange={ev => setEntries(prev => ({ ...prev, [staff.id]: { ...prev[staff.id], timeIn: ev.target.value } }))}
+                          className="border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-400 w-24"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-gray-400 w-5">Out</span>
+                        <input
+                          type="time"
+                          value={e.timeOut}
+                          onChange={ev => setEntries(prev => ({ ...prev, [staff.id]: { ...prev[staff.id], timeOut: ev.target.value } }))}
+                          className="border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-400 w-24"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        <div className="p-5 border-t border-gray-100">
+          <button
+            onClick={handleSubmit}
+            disabled={saving}
+            className="w-full py-2.5 bg-[#020e2f] text-white text-sm font-semibold rounded-xl hover:bg-[#010922] disabled:opacity-50 transition-colors"
+          >
+            {saving ? 'Signing in…' : 'Sign In & Open Register'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
+
+// ─── Staff Section ────────────────────────────────────────────────────────────
+
+function StaffSection({ staff, todayStr, onSignOut, onEdit }: {
+  staff: StaffEntry[]
+  todayStr: string
+  onSignOut: (id: string, time: string) => void
+  onEdit: () => void
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editTime, setEditTime] = useState('')
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold text-gray-700">Staff</h2>
+        <button onClick={onEdit} className="text-xs text-[#020e2f] hover:underline print:hidden">
+          Edit sign-in
+        </button>
+      </div>
+      <div className="space-y-2">
+        {staff.map(s => {
+          const isOut = !!s.signedOutAt
+          return (
+            <div key={s.id} className={`flex items-center gap-2 ${isOut ? 'opacity-60' : ''}`}>
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isOut ? 'bg-gray-300' : 'bg-green-500'}`} />
+              <span className="flex-1 text-sm font-medium text-gray-800">{s.staffName}</span>
+              <span className="text-xs text-gray-500">{fmtTime(s.signedInAt)}</span>
+              {isOut ? (
+                <>
+                  <span className="text-xs text-gray-400 whitespace-nowrap">→ {fmtTime(s.signedOutAt)}</span>
+                  <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full font-medium">OUT</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">IN</span>
+                  {editingId === s.id ? (
+                    <div className="flex items-center gap-1 print:hidden">
+                      <input
+                        type="time"
+                        value={editTime}
+                        onChange={e => setEditTime(e.target.value)}
+                        className="border border-gray-300 rounded-lg px-1.5 py-0.5 text-xs w-24 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                      />
+                      <button
+                        onClick={() => { onSignOut(s.id, editTime); setEditingId(null) }}
+                        className="text-xs bg-gray-700 text-white px-2 py-0.5 rounded-lg"
+                      >Save</button>
+                      <button onClick={() => setEditingId(null)} className="text-xs text-gray-400">✕</button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => { setEditingId(s.id); setEditTime(localTimeNow()) }}
+                      className="text-xs text-gray-500 border border-gray-200 px-2 py-0.5 rounded-lg hover:bg-gray-50 print:hidden"
+                    >Sign out</button>
+                  )}
+                </>
+              )}
+            </div>
+          )
+        })}
+        {staff.length === 0 && (
+          <p className="text-xs text-gray-400">No staff signed in.</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Visitors Section ─────────────────────────────────────────────────────────
+
+function VisitorsSection({ visitors, todayStr, onAdd, onSignOut }: {
+  visitors: VisitorEntry[]
+  todayStr: string
+  onAdd: (name: string, org: string, time: string) => Promise<void>
+  onSignOut: (id: string, time: string) => void
+}) {
+  const [name, setName] = useState('')
+  const [org, setOrg] = useState('')
+  const [time, setTime] = useState(localTimeNow)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editTime, setEditTime] = useState('')
+  const [adding, setAdding] = useState(false)
+
+  async function handleAdd() {
+    if (!name.trim()) return
+    setAdding(true)
+    await onAdd(name.trim(), org.trim(), time)
+    setName('')
+    setOrg('')
+    setAdding(false)
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <h2 className="text-sm font-semibold text-gray-700 mb-3">Visitors</h2>
+      {visitors.length > 0 && (
+        <div className="space-y-2 mb-4">
+          {visitors.map(v => {
+            const isOut = !!v.signedOutAt
+            return (
+              <div key={v.id} className={`flex items-center gap-2 ${isOut ? 'opacity-60' : ''}`}>
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isOut ? 'bg-gray-300' : 'bg-blue-500'}`} />
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-medium text-gray-800">{v.name}</span>
+                  {v.organisation && <span className="text-xs text-gray-400 ml-1.5">({v.organisation})</span>}
+                </div>
+                <span className="text-xs text-gray-500 whitespace-nowrap">{fmtTime(v.signedInAt)}</span>
+                {isOut ? (
+                  <>
+                    <span className="text-xs text-gray-400 whitespace-nowrap">→ {fmtTime(v.signedOutAt)}</span>
+                    <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full font-medium">OUT</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">IN</span>
+                    {editingId === v.id ? (
+                      <div className="flex items-center gap-1 print:hidden">
+                        <input
+                          type="time"
+                          value={editTime}
+                          onChange={e => setEditTime(e.target.value)}
+                          className="border border-gray-300 rounded-lg px-1.5 py-0.5 text-xs w-24 focus:outline-none"
+                        />
+                        <button
+                          onClick={() => { onSignOut(v.id, editTime); setEditingId(null) }}
+                          className="text-xs bg-gray-700 text-white px-2 py-0.5 rounded-lg"
+                        >Save</button>
+                        <button onClick={() => setEditingId(null)} className="text-xs text-gray-400">✕</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => { setEditingId(v.id); setEditTime(localTimeNow()) }}
+                        className="text-xs text-gray-500 border border-gray-200 px-2 py-0.5 rounded-lg hover:bg-gray-50 print:hidden"
+                      >Sign out</button>
+                    )}
+                  </>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+      <div className={`flex gap-2 flex-wrap print:hidden ${visitors.length > 0 ? 'border-t border-gray-100 pt-3' : ''}`}>
+        <input
+          type="text"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleAdd()}
+          placeholder="Visitor name"
+          className="flex-1 min-w-[130px] border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
+        />
+        <input
+          type="text"
+          value={org}
+          onChange={e => setOrg(e.target.value)}
+          placeholder="Organisation (optional)"
+          className="flex-1 min-w-[130px] border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
+        />
+        <input
+          type="time"
+          value={time}
+          onChange={e => setTime(e.target.value)}
+          className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-400 w-28"
+        />
+        <button
+          onClick={handleAdd}
+          disabled={adding || !name.trim()}
+          className="px-3 py-1.5 bg-[#020e2f] text-white text-sm rounded-lg hover:bg-[#010922] disabled:opacity-50 whitespace-nowrap"
+        >
+          {adding ? '…' : 'Add visitor'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Fire Register Modal ───────────────────────────────────────────────────────
+
+function FireRegisterModal({ rows, staff, visitors, todayStr, dayName, statuses, signedOutTimes, onClose }: {
+  rows: RegisterRow[]
+  staff: StaffEntry[]
+  visitors: VisitorEntry[]
+  todayStr: string
+  dayName: string
+  statuses: Record<string, 'present' | 'absent' | null>
+  signedOutTimes: Record<string, string | null>
+  onClose: () => void
+}) {
+  const dateLabel = new Date(todayStr + 'T12:00:00').toLocaleDateString('en-GB', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  })
+  const generatedAt = localTimeNow()
+
+  const childrenIn = rows.filter(r => {
+    const key = `${r.childId}-${r.sessionType}`
+    return statuses[key] === 'present' && !signedOutTimes[key]
+  }).length
+  const staffIn = staff.filter(s => !s.signedOutAt).length
+  const visitorsIn = visitors.filter(v => !v.signedOutAt).length
+  const total = childrenIn + staffIn + visitorsIn
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-start justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full my-4">
+        <div className="bg-red-600 text-white rounded-t-2xl p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold">🔥 Fire Register</h2>
+              <p className="text-red-200 text-sm mt-0.5">{dateLabel}</p>
+            </div>
+            <div className="text-right">
+              <div className="text-3xl font-bold">{total}</div>
+              <div className="text-red-200 text-xs">in building</div>
+            </div>
+          </div>
+          <p className="text-red-300 text-xs mt-2">Generated at {generatedAt}</p>
+        </div>
+
+        <div className="p-5 space-y-5">
+          {/* Children */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Children</h3>
+              <span className="text-xs bg-green-50 text-green-700 px-1.5 py-0.5 rounded-full">{childrenIn} in building</span>
+            </div>
+            <div className="divide-y divide-gray-50">
+              {rows.map(r => {
+                const key = `${r.childId}-${r.sessionType}`
+                const status = statuses[key]
+                const signedOut = signedOutTimes[key]
+                const isIn = status === 'present' && !signedOut
+                const isSignedOut = status === 'present' && !!signedOut
+                const isAbsent = status === 'absent'
+                return (
+                  <div key={key} className={`flex items-center gap-2 py-1.5 ${!isIn ? 'opacity-40' : ''}`}>
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isIn ? 'bg-green-500' : isSignedOut ? 'bg-gray-400' : isAbsent ? 'bg-red-400' : 'bg-gray-200'}`} />
+                    <span className="flex-1 text-sm font-medium text-gray-900">{r.firstName} {r.lastName}</span>
+                    <span className="text-xs text-gray-400">{SESSION_LABELS[r.sessionType]}</span>
+                    <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${
+                      isIn ? 'bg-green-100 text-green-700' :
+                      isSignedOut ? 'bg-gray-100 text-gray-500' :
+                      isAbsent ? 'bg-red-100 text-red-600' :
+                      'bg-gray-50 text-gray-400'
+                    }`}>
+                      {isIn ? 'IN' : isSignedOut ? 'OUT' : isAbsent ? 'ABSENT' : '—'}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Staff */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Staff</h3>
+              <span className="text-xs bg-green-50 text-green-700 px-1.5 py-0.5 rounded-full">{staffIn} in building</span>
+            </div>
+            {staff.length === 0 ? (
+              <p className="text-xs text-gray-400 italic">No staff signed in today.</p>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {staff.map(s => {
+                  const isOut = !!s.signedOutAt
+                  return (
+                    <div key={s.id} className={`flex items-center gap-2 py-1.5 ${isOut ? 'opacity-40' : ''}`}>
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isOut ? 'bg-gray-300' : 'bg-green-500'}`} />
+                      <span className="flex-1 text-sm font-medium text-gray-900">{s.staffName}</span>
+                      <span className="text-xs text-gray-400">
+                        {fmtTime(s.signedInAt)}{s.signedOutAt ? ` → ${fmtTime(s.signedOutAt)}` : ''}
+                      </span>
+                      <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${isOut ? 'bg-gray-100 text-gray-500' : 'bg-green-100 text-green-700'}`}>
+                        {isOut ? 'OUT' : 'IN'}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Visitors */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Visitors</h3>
+              <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full">{visitorsIn} in building</span>
+            </div>
+            {visitors.length === 0 ? (
+              <p className="text-xs text-gray-400 italic">No visitors today.</p>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {visitors.map(v => {
+                  const isOut = !!v.signedOutAt
+                  return (
+                    <div key={v.id} className={`flex items-center gap-2 py-1.5 ${isOut ? 'opacity-40' : ''}`}>
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isOut ? 'bg-gray-300' : 'bg-blue-500'}`} />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium text-gray-900">{v.name}</span>
+                        {v.organisation && <span className="text-xs text-gray-400 ml-1.5">({v.organisation})</span>}
+                      </div>
+                      <span className="text-xs text-gray-400">
+                        {fmtTime(v.signedInAt)}{v.signedOutAt ? ` → ${fmtTime(v.signedOutAt)}` : ''}
+                      </span>
+                      <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${isOut ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-700'}`}>
+                        {isOut ? 'OUT' : 'IN'}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="p-5 border-t border-gray-100 flex gap-3">
+          <button
+            onClick={() => window.print()}
+            className="flex-1 py-2.5 bg-red-600 text-white font-semibold rounded-xl hover:bg-red-700 transition-colors"
+          >
+            Print
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function RegisterClient({
   rows,
@@ -129,6 +611,10 @@ export default function RegisterClient({
   userId,
   userName,
   initialNotes,
+  staffAttendance,
+  visitors,
+  allStaff,
+  needsStaffSignIn,
 }: {
   rows: RegisterRow[]
   todayStr: string
@@ -138,7 +624,14 @@ export default function RegisterClient({
   userId: string
   userName: string
   initialNotes: Record<string, { note: string; completed: boolean; completedByName: string | null }>
+  staffAttendance: StaffEntry[]
+  visitors: VisitorEntry[]
+  allStaff: StaffUser[]
+  needsStaffSignIn: boolean
 }) {
+  const router = useRouter()
+
+  // Children register state
   const [statuses, setStatuses] = useState<Record<string, 'present' | 'absent' | null>>(
     Object.fromEntries(rows.map(r => [`${r.childId}-${r.sessionType}`, r.existing?.status ?? null]))
   )
@@ -149,10 +642,7 @@ export default function RegisterClient({
     Object.fromEntries(rows.map(r => [`${r.childId}-${r.sessionType}`, r.existing?.parentContacted ?? false]))
   )
   const [parentContactedDates, setParentContactedDates] = useState<Record<string, string>>(
-    Object.fromEntries(rows.map(r => [
-      `${r.childId}-${r.sessionType}`,
-      r.existing?.parentContactedDate ?? todayStr,
-    ]))
+    Object.fromEntries(rows.map(r => [`${r.childId}-${r.sessionType}`, r.existing?.parentContactedDate ?? todayStr]))
   )
   const [loading, setLoading] = useState<Record<string, boolean>>({})
   const [expandedAbsence, setExpandedAbsence] = useState<Record<string, boolean>>({})
@@ -181,9 +671,25 @@ export default function RegisterClient({
   const [signingOut, setSigningOut] = useState<Record<string, boolean>>({})
   const [endSessionWarning, setEndSessionWarning] = useState(0)
 
+  // Staff + visitor state
+  const [showStaffModal, setShowStaffModal] = useState(needsStaffSignIn)
+  const [staffLocal, setStaffLocal] = useState<StaffEntry[]>(staffAttendance)
+  const [visitorsLocal, setVisitorsLocal] = useState<VisitorEntry[]>(visitors)
+  const [showFireRegister, setShowFireRegister] = useState(false)
+
+  const staffKey = staffAttendance.map(s => s.id).join(',')
+  const visitorsKey = visitors.map(v => `${v.id}:${v.signedOutAt}`).join(',')
+  useEffect(() => { setStaffLocal(staffAttendance) }, [staffKey])
+  useEffect(() => { setVisitorsLocal(visitors) }, [visitorsKey])
+
   const presentCount = Object.values(statuses).filter(s => s === 'present').length
 
-  async function save(childId: string, sessionType: string, overrides?: { status?: 'present' | 'absent' | null; absenceReason?: string; parentContacted?: boolean; parentContactedDate?: string }) {
+  async function save(childId: string, sessionType: string, overrides?: {
+    status?: 'present' | 'absent' | null
+    absenceReason?: string
+    parentContacted?: boolean
+    parentContactedDate?: string
+  }) {
     const key = `${childId}-${sessionType}`
     await markAttendance({
       childId,
@@ -205,13 +711,7 @@ export default function RegisterClient({
     setShowNote(s => ({ ...s, [key]: false }))
   }
 
-  function localTimeNow() {
-    const now = new Date()
-    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-  }
-
   function formatSignOutTime(isoOrLocal: string) {
-    // Handle both stored ISO strings and local "HH:MM" strings
     if (isoOrLocal.length <= 5) return isoOrLocal
     const d = new Date(isoOrLocal)
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
@@ -271,6 +771,23 @@ export default function RegisterClient({
     setSavingAbsence(s => ({ ...s, [key]: false }))
   }
 
+  async function handleStaffSignOut(id: string, time: string) {
+    setStaffLocal(s => s.map(st => st.id === id ? { ...st, signedOutAt: `${todayStr}T${time}:00` } : st))
+    await updateStaffSignOut(id, todayStr, time)
+  }
+
+  async function handleAddVisitor(name: string, org: string, time: string) {
+    const tempId = `temp-${Date.now()}`
+    setVisitorsLocal(v => [...v, { id: tempId, name, organisation: org || null, signedInAt: `${todayStr}T${time}:00`, signedOutAt: null }])
+    await addVisitorAction(todayStr, name, org, time)
+    router.refresh()
+  }
+
+  async function handleVisitorSignOut(id: string, time: string) {
+    setVisitorsLocal(v => v.map(vis => vis.id === id ? { ...vis, signedOutAt: `${todayStr}T${time}:00` } : vis))
+    await signOutVisitor(id, todayStr, time)
+  }
+
   if (rows.length === 0) {
     return (
       <div>
@@ -284,307 +801,343 @@ export default function RegisterClient({
   }
 
   return (
-    <div>
-      <div className="flex items-start justify-between mb-4 gap-3 flex-wrap">
-        <div>
-          <h1 className="text-xl font-bold text-gray-800">Register</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {DAY_LABELS[dayName] ?? dayName} — {new Date(todayStr + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
-          </p>
-        </div>
-        <div className="flex gap-2 items-start">
-          <div className="bg-green-50 border border-green-200 rounded-lg px-3 sm:px-4 py-2 text-center">
-            <div className="text-xl sm:text-2xl font-bold text-green-700">{presentCount}</div>
-            <div className="text-xs text-green-600">Present</div>
-          </div>
-          <div className="bg-red-50 border border-red-200 rounded-lg px-3 sm:px-4 py-2 text-center">
-            <div className="text-xl sm:text-2xl font-bold text-red-600">
-              {Object.values(statuses).filter(s => s === 'absent').length}
-            </div>
-            <div className="text-xs text-red-500">Absent</div>
-          </div>
-          <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 sm:px-4 py-2 text-center">
-            <div className="text-xl sm:text-2xl font-bold text-gray-600">{totalCount}</div>
-            <div className="text-xs text-gray-500">Expected</div>
-          </div>
-          <button
-            onClick={handleEndSession}
-            title="End the session — all children must be individually signed out first"
-            className="px-3 py-2 bg-gray-700 text-white text-xs font-medium rounded-lg hover:bg-gray-800 print:hidden"
-          >
-            End session
-          </button>
-          <button
-            onClick={() => window.print()}
-            className="px-3 py-2 bg-[#020e2f] text-white text-xs font-medium rounded-lg hover:bg-[#010922] print:hidden"
-            title="Print fire register"
-          >
-            🔥 Fire
-          </button>
-        </div>
-      </div>
-
-      {endSessionWarning > 0 && (
-        <div className="mb-4 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 text-sm text-amber-800 print:hidden">
-          <strong>{endSessionWarning} {endSessionWarning === 1 ? 'child is' : 'children are'} still signed in</strong> — please sign {endSessionWarning === 1 ? 'them' : 'each of them'} out individually so the correct time and any late fees are recorded.
-        </div>
+    <>
+      {showStaffModal && (
+        <StaffSignInModal allStaff={allStaff} dayName={dayName} todayStr={todayStr} />
       )}
 
-      {/* Ratio widget */}
-      <RatioWidget rows={rows} statuses={statuses} />
+      {showFireRegister && (
+        <FireRegisterModal
+          rows={rows}
+          staff={staffLocal}
+          visitors={visitorsLocal}
+          todayStr={todayStr}
+          dayName={dayName}
+          statuses={statuses}
+          signedOutTimes={signedOutTimes}
+          onClose={() => setShowFireRegister(false)}
+        />
+      )}
 
-      <div className="space-y-2">
-        {rows.map(row => {
-          const key = `${row.childId}-${row.sessionType}`
-          const status = statuses[key]
-          const isLoading = loading[key]
-          const showAbsence = expandedAbsence[key] || status === 'absent'
-          const contacted = parentContacted[key]
-          const hasNote = !!(notes[key]?.trim())
-          const noteOpen = showNote[key] || false
-          const signedIn = signedInTimes[key]
-          const signedInDisplay = signedIn ? formatSignOutTime(signedIn) : null
-          const signedOut = signedOutTimes[key]
-          const signedOutDisplay = signedOut ? formatSignOutTime(signedOut) : null
-          const lateMinutes = signedOutDisplay ? minutesLateFromTime(signedOutDisplay) : 0
-
-          return (
-            <div
-              key={key}
-              className={`bg-white rounded-xl border transition-colors ${
-                status === 'present' ? 'border-green-300 bg-green-50' :
-                status === 'absent' ? 'border-red-300 bg-red-50' :
-                row.hasAllergies ? 'border-l-4 border-amber-400 border-gray-200' :
-                'border-gray-200'
-              }`}
+      <div>
+        <div className="flex items-start justify-between mb-4 gap-3 flex-wrap">
+          <div>
+            <h1 className="text-xl font-bold text-gray-800">Register</h1>
+            <p className="text-sm text-gray-500 mt-0.5">
+              {DAY_LABELS[dayName] ?? dayName} — {new Date(todayStr + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
+          </div>
+          <div className="flex gap-2 items-start">
+            <div className="bg-green-50 border border-green-200 rounded-lg px-3 sm:px-4 py-2 text-center">
+              <div className="text-xl sm:text-2xl font-bold text-green-700">{presentCount}</div>
+              <div className="text-xs text-green-600">Present</div>
+            </div>
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 sm:px-4 py-2 text-center">
+              <div className="text-xl sm:text-2xl font-bold text-red-600">
+                {Object.values(statuses).filter(s => s === 'absent').length}
+              </div>
+              <div className="text-xs text-red-500">Absent</div>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 sm:px-4 py-2 text-center">
+              <div className="text-xl sm:text-2xl font-bold text-gray-600">{totalCount}</div>
+              <div className="text-xs text-gray-500">Expected</div>
+            </div>
+            <button
+              onClick={handleEndSession}
+              title="End the session — all children must be individually signed out first"
+              className="px-3 py-2 bg-gray-700 text-white text-xs font-medium rounded-lg hover:bg-gray-800 print:hidden"
             >
-              {/* ── Main row ── */}
-              <div className="flex items-center gap-2 px-3 py-2.5 flex-wrap">
+              End session
+            </button>
+            <button
+              onClick={() => setShowFireRegister(true)}
+              className="px-3 py-2 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 print:hidden transition-colors"
+              title="Fire register — see who is in the building"
+            >
+              🔥 Fire
+            </button>
+          </div>
+        </div>
 
-                {/* Name + session + badges */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="font-medium text-gray-900 text-sm">{row.firstName} {row.lastName}</span>
-                    {row.hasAllergies && (
-                      <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">⚠ Allergy</span>
-                    )}
-                    {row.hasUnsignedAccident && (
-                      <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">✎ Unsigned</span>
-                    )}
-                    {row.existing?.rule48h && status === 'absent' && (
-                      <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium">48hr</span>
-                    )}
-                    {hasNote && !noteOpen && (
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium truncate max-w-[160px] ${
-                        noteCompleted[key]
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                      }`}>
-                        {noteCompleted[key] ? '✓' : '📋'} {notes[key]}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-gray-400 mt-0.5">{SESSION_LABELS[row.sessionType]}</div>
-                </div>
+        {endSessionWarning > 0 && (
+          <div className="mb-4 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 text-sm text-amber-800 print:hidden">
+            <strong>{endSessionWarning} {endSessionWarning === 1 ? 'child is' : 'children are'} still signed in</strong> — please sign {endSessionWarning === 1 ? 'them' : 'each of them'} out individually so the correct time and any late fees are recorded.
+          </div>
+        )}
 
-                {/* Sign-in time — present only */}
-                {status === 'present' && signedInDisplay && (
-                  <span className="text-xs text-gray-500 whitespace-nowrap font-medium">{signedInDisplay}</span>
-                )}
+        {/* Ratio widget */}
+        <RatioWidget rows={rows} statuses={statuses} />
 
-                {/* Dropped by — inline when present */}
-                {status === 'present' && (
-                  <input
-                    type="text"
-                    value={droppedByValues[key] ?? ''}
-                    onChange={e => setDroppedByValues(v => ({ ...v, [key]: e.target.value }))}
-                    onBlur={() => saveDroppedBy(row.childId, row.sessionType, todayStr, droppedByValues[key] ?? '')}
-                    placeholder="Who dropped off?"
-                    className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-green-300 w-32 min-w-0"
-                  />
-                )}
+        {/* Children register */}
+        <div className="space-y-2">
+          {rows.map(row => {
+            const key = `${row.childId}-${row.sessionType}`
+            const status = statuses[key]
+            const isLoading = loading[key]
+            const showAbsence = expandedAbsence[key] || status === 'absent'
+            const contacted = parentContacted[key]
+            const hasNote = !!(notes[key]?.trim())
+            const noteOpen = showNote[key] || false
+            const signedIn = signedInTimes[key]
+            const signedInDisplay = signedIn ? formatSignOutTime(signedIn) : null
+            const signedOut = signedOutTimes[key]
+            const signedOutDisplay = signedOut ? formatSignOutTime(signedOut) : null
+            const lateMinutes = signedOutDisplay ? minutesLateFromTime(signedOutDisplay) : 0
 
-                {/* Note button */}
-                <button
-                  onClick={() => setShowNote(s => ({ ...s, [key]: !noteOpen }))}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${
-                    noteOpen
-                      ? 'bg-indigo-600 border-indigo-600 text-white'
-                      : hasNote
-                        ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
-                        : 'border-gray-300 text-gray-500 hover:border-indigo-300 hover:text-indigo-600'
-                  }`}
-                >
-                  Note
-                </button>
+            return (
+              <div
+                key={key}
+                className={`bg-white rounded-xl border transition-colors ${
+                  status === 'present' ? 'border-green-300 bg-green-50' :
+                  status === 'absent' ? 'border-red-300 bg-red-50' :
+                  row.hasAllergies ? 'border-l-4 border-amber-400 border-gray-200' :
+                  'border-gray-200'
+                }`}
+              >
+                {/* ── Main row ── */}
+                <div className="flex items-center gap-2 px-3 py-2.5 flex-wrap">
 
-                {/* Present button — hidden when absent */}
-                {status !== 'absent' && (
-                  <button
-                    onClick={() => handleMark(row.childId, row.sessionType, 'present')}
-                    disabled={isLoading}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${
-                      status === 'present'
-                        ? 'bg-green-600 border-green-600 text-white'
-                        : 'border-green-400 text-green-700 hover:bg-green-50'
-                    }`}
-                  >
-                    Present
-                  </button>
-                )}
-
-                {/* Absent button — hidden when present */}
-                {status !== 'present' && (
-                  <button
-                    onClick={() => handleMark(row.childId, row.sessionType, 'absent')}
-                    disabled={isLoading}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${
-                      status === 'absent'
-                        ? 'bg-red-500 border-red-500 text-white'
-                        : 'border-red-300 text-red-600 hover:bg-red-50'
-                    }`}
-                  >
-                    Absent
-                  </button>
-                )}
-
-                {/* Sign out — present only, after the buttons */}
-                {status === 'present' && (
-                  signedOutDisplay ? (
-                    <div className="flex items-center gap-1 whitespace-nowrap">
-                      <span className="text-xs text-gray-500">Out: <span className="font-medium text-gray-700">{signedOutDisplay}</span></span>
-                      {lateMinutes > 0 && (
-                        <span className="text-xs bg-red-100 text-red-700 font-medium px-1.5 py-0.5 rounded-full">
-                          +{lateMinutes}min £{lateMinutes.toFixed(2)}
+                  {/* Name + session + badges */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-medium text-gray-900 text-sm">{row.firstName} {row.lastName}</span>
+                      {row.hasAllergies && (
+                        <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">⚠ Allergy</span>
+                      )}
+                      {row.hasUnsignedAccident && (
+                        <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">✎ Unsigned</span>
+                      )}
+                      {row.existing?.rule48h && status === 'absent' && (
+                        <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium">48hr</span>
+                      )}
+                      {hasNote && !noteOpen && (
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium truncate max-w-[160px] ${
+                          noteCompleted[key]
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                        }`}>
+                          {noteCompleted[key] ? '✓' : '📋'} {notes[key]}
                         </span>
                       )}
                     </div>
-                  ) : (
-                    <button
-                      onClick={() => handleSignOut(row.childId, row.sessionType)}
-                      disabled={signingOut[key]}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors whitespace-nowrap"
-                    >
-                      {signingOut[key] ? '…' : 'Sign out'}
-                    </button>
-                  )
-                )}
-              </div>
+                    <div className="text-xs text-gray-400 mt-0.5">{SESSION_LABELS[row.sessionType]}</div>
+                  </div>
 
-              {/* ── Note box ── */}
-              {noteOpen && (
-                <div className="px-3 pb-3 pt-0 border-t border-gray-100">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5 mt-2.5">
-                    Session note <span className="font-normal text-gray-400">(e.g. Nan collecting, leaving early at 2pm)</span>
-                  </label>
-                  <textarea
-                    value={notes[key] ?? ''}
-                    onChange={e => setNotes(n => ({ ...n, [key]: e.target.value }))}
-                    rows={2}
-                    placeholder="Add a note for this session..."
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
-                  />
-                  {hasNote && (
-                    <label className="flex items-center gap-2 mt-2 text-sm text-gray-700 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={noteCompleted[key] ?? false}
-                        onChange={async e => {
-                          const checked = e.target.checked
-                          const byName = checked ? userName : null
-                          setNoteCompleted(c => ({ ...c, [key]: checked }))
-                          setNoteCompletedBy(b => ({ ...b, [key]: byName }))
-                          await saveNoteCompleted(row.childId, row.sessionType, todayStr, checked, byName)
-                        }}
-                        className="rounded"
-                      />
-                      Completed
-                      {noteCompleted[key] && noteCompletedBy[key] && (
-                        <span className="text-xs text-gray-400 font-normal">by {noteCompletedBy[key]}</span>
-                      )}
-                    </label>
+                  {/* Sign-in time — present only */}
+                  {status === 'present' && signedInDisplay && (
+                    <span className="text-xs text-gray-500 whitespace-nowrap font-medium">{signedInDisplay}</span>
                   )}
-                  <div className="flex gap-2 mt-2">
+
+                  {/* Dropped by — inline when present */}
+                  {status === 'present' && (
+                    <input
+                      type="text"
+                      value={droppedByValues[key] ?? ''}
+                      onChange={e => setDroppedByValues(v => ({ ...v, [key]: e.target.value }))}
+                      onBlur={() => saveDroppedBy(row.childId, row.sessionType, todayStr, droppedByValues[key] ?? '')}
+                      placeholder="Who dropped off?"
+                      className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-green-300 w-32 min-w-0"
+                    />
+                  )}
+
+                  {/* Note button */}
+                  <button
+                    onClick={() => setShowNote(s => ({ ...s, [key]: !noteOpen }))}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${
+                      noteOpen
+                        ? 'bg-indigo-600 border-indigo-600 text-white'
+                        : hasNote
+                          ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                          : 'border-gray-300 text-gray-500 hover:border-indigo-300 hover:text-indigo-600'
+                    }`}
+                  >
+                    Note
+                  </button>
+
+                  {/* Present button — hidden when absent */}
+                  {status !== 'absent' && (
                     <button
-                      onClick={() => handleSaveNote(row.childId, row.sessionType)}
-                      disabled={savingNote[key]}
+                      onClick={() => handleMark(row.childId, row.sessionType, 'present')}
+                      disabled={isLoading}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${
+                        status === 'present'
+                          ? 'bg-green-600 border-green-600 text-white'
+                          : 'border-green-400 text-green-700 hover:bg-green-50'
+                      }`}
+                    >
+                      Present
+                    </button>
+                  )}
+
+                  {/* Absent button — hidden when present */}
+                  {status !== 'present' && (
+                    <button
+                      onClick={() => handleMark(row.childId, row.sessionType, 'absent')}
+                      disabled={isLoading}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${
+                        status === 'absent'
+                          ? 'bg-red-500 border-red-500 text-white'
+                          : 'border-red-300 text-red-600 hover:bg-red-50'
+                      }`}
+                    >
+                      Absent
+                    </button>
+                  )}
+
+                  {/* Sign out — present only */}
+                  {status === 'present' && (
+                    signedOutDisplay ? (
+                      <div className="flex items-center gap-1 whitespace-nowrap">
+                        <span className="text-xs text-gray-500">Out: <span className="font-medium text-gray-700">{signedOutDisplay}</span></span>
+                        {lateMinutes > 0 && (
+                          <span className="text-xs bg-red-100 text-red-700 font-medium px-1.5 py-0.5 rounded-full">
+                            +{lateMinutes}min £{lateMinutes.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleSignOut(row.childId, row.sessionType)}
+                        disabled={signingOut[key]}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors whitespace-nowrap"
+                      >
+                        {signingOut[key] ? '…' : 'Sign out'}
+                      </button>
+                    )
+                  )}
+                </div>
+
+                {/* ── Note box ── */}
+                {noteOpen && (
+                  <div className="px-3 pb-3 pt-0 border-t border-gray-100">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5 mt-2.5">
+                      Session note <span className="font-normal text-gray-400">(e.g. Nan collecting, leaving early at 2pm)</span>
+                    </label>
+                    <textarea
+                      value={notes[key] ?? ''}
+                      onChange={e => setNotes(n => ({ ...n, [key]: e.target.value }))}
+                      rows={2}
+                      placeholder="Add a note for this session..."
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+                    />
+                    {hasNote && (
+                      <label className="flex items-center gap-2 mt-2 text-sm text-gray-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={noteCompleted[key] ?? false}
+                          onChange={async e => {
+                            const checked = e.target.checked
+                            const byName = checked ? userName : null
+                            setNoteCompleted(c => ({ ...c, [key]: checked }))
+                            setNoteCompletedBy(b => ({ ...b, [key]: byName }))
+                            await saveNoteCompleted(row.childId, row.sessionType, todayStr, checked, byName)
+                          }}
+                          className="rounded"
+                        />
+                        Completed
+                        {noteCompleted[key] && noteCompletedBy[key] && (
+                          <span className="text-xs text-gray-400 font-normal">by {noteCompletedBy[key]}</span>
+                        )}
+                      </label>
+                    )}
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={() => handleSaveNote(row.childId, row.sessionType)}
+                        disabled={savingNote[key]}
+                        className="px-3 py-1.5 bg-[#020e2f] text-white text-xs rounded-lg hover:bg-[#010922] disabled:opacity-50"
+                      >
+                        {savingNote[key] ? 'Saving…' : 'Save note'}
+                      </button>
+                      {hasNote && (
+                        <button
+                          onClick={() => { setNotes(n => ({ ...n, [key]: '' })); handleSaveNote(row.childId, row.sessionType) }}
+                          className="px-3 py-1.5 text-xs text-red-500 hover:text-red-700"
+                        >
+                          Clear
+                        </button>
+                      )}
+                      <button
+                        onClick={() => { setShowNote(s => ({ ...s, [key]: false })); setNotes(n => ({ ...n, [key]: row.sessionNote?.note ?? '' })) }}
+                        className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Absence section ── */}
+                {showAbsence && (
+                  <div className="px-3 pb-3 space-y-2.5 border-t border-red-200 pt-3">
+                    <input
+                      type="text"
+                      value={absenceReasons[key] ?? ''}
+                      onChange={e => setAbsenceReasons(r => ({ ...r, [key]: e.target.value }))}
+                      placeholder="Reason for absence (e.g. Unwell, family holiday...)"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-red-300"
+                    />
+                    <div className="flex items-center gap-4 flex-wrap">
+                      <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={contacted ?? false}
+                          onChange={e => {
+                            const checked = e.target.checked
+                            setParentContacted(p => ({ ...p, [key]: checked }))
+                            if (!checked) setParentContactedDates(d => ({ ...d, [key]: todayStr }))
+                          }}
+                          className="rounded"
+                        />
+                        Parent contacted
+                      </label>
+                      {contacted && (
+                        <input
+                          type="date"
+                          value={parentContactedDates[key] ?? todayStr}
+                          onChange={e => setParentContactedDates(pd => ({ ...pd, [key]: e.target.value }))}
+                          className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 bg-white"
+                        />
+                      )}
+                      <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={is48h[key] ?? false}
+                          onChange={e => setIs48h(v => ({ ...v, [key]: e.target.checked }))}
+                          className="rounded"
+                        />
+                        48-hour rule
+                      </label>
+                    </div>
+                    <button
+                      onClick={() => handleSaveAbsence(row.childId, row.sessionType)}
+                      disabled={savingAbsence[key]}
                       className="px-3 py-1.5 bg-[#020e2f] text-white text-xs rounded-lg hover:bg-[#010922] disabled:opacity-50"
                     >
-                      {savingNote[key] ? 'Saving…' : 'Save note'}
-                    </button>
-                    {hasNote && (
-                      <button
-                        onClick={() => { setNotes(n => ({ ...n, [key]: '' })); handleSaveNote(row.childId, row.sessionType) }}
-                        className="px-3 py-1.5 text-xs text-red-500 hover:text-red-700"
-                      >
-                        Clear
-                      </button>
-                    )}
-                    <button
-                      onClick={() => { setShowNote(s => ({ ...s, [key]: false })); setNotes(n => ({ ...n, [key]: row.sessionNote?.note ?? '' })) }}
-                      className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600"
-                    >
-                      Cancel
+                      {savingAbsence[key] ? 'Saving…' : 'Save'}
                     </button>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+            )
+          })}
+        </div>
 
-              {/* ── Absence section ── */}
-              {showAbsence && (
-                <div className="px-3 pb-3 space-y-2.5 border-t border-red-200 pt-3">
-                  <input
-                    type="text"
-                    value={absenceReasons[key] ?? ''}
-                    onChange={e => setAbsenceReasons(r => ({ ...r, [key]: e.target.value }))}
-                    placeholder="Reason for absence (e.g. Unwell, family holiday...)"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-red-300"
-                  />
-                  <div className="flex items-center gap-4 flex-wrap">
-                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={contacted ?? false}
-                        onChange={e => {
-                          const checked = e.target.checked
-                          setParentContacted(p => ({ ...p, [key]: checked }))
-                          if (!checked) setParentContactedDates(d => ({ ...d, [key]: todayStr }))
-                        }}
-                        className="rounded"
-                      />
-                      Parent contacted
-                    </label>
-                    {contacted && (
-                      <input
-                        type="date"
-                        value={parentContactedDates[key] ?? todayStr}
-                        onChange={e => setParentContactedDates(pd => ({ ...pd, [key]: e.target.value }))}
-                        className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 bg-white"
-                      />
-                    )}
-                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={is48h[key] ?? false}
-                        onChange={e => setIs48h(v => ({ ...v, [key]: e.target.checked }))}
-                        className="rounded"
-                      />
-                      48-hour rule
-                    </label>
-                  </div>
-                  <button
-                    onClick={() => handleSaveAbsence(row.childId, row.sessionType)}
-                    disabled={savingAbsence[key]}
-                    className="px-3 py-1.5 bg-[#020e2f] text-white text-xs rounded-lg hover:bg-[#010922] disabled:opacity-50"
-                  >
-                    {savingAbsence[key] ? 'Saving…' : 'Save'}
-                  </button>
-                </div>
-              )}
-            </div>
-          )
-        })}
+        {/* Staff + Visitors */}
+        <div className="space-y-3 mt-4">
+          <StaffSection
+            staff={staffLocal}
+            todayStr={todayStr}
+            onSignOut={handleStaffSignOut}
+            onEdit={() => setShowStaffModal(true)}
+          />
+          <VisitorsSection
+            visitors={visitorsLocal}
+            todayStr={todayStr}
+            onAdd={handleAddVisitor}
+            onSignOut={handleVisitorSignOut}
+          />
+        </div>
       </div>
-    </div>
+    </>
   )
 }

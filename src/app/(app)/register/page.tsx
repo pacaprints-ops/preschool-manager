@@ -1,7 +1,10 @@
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { children, childSessions, registerEntries, registerNotes, accidentForms } from '@/lib/db/schema'
-import { eq, and, inArray, isNull } from 'drizzle-orm'
+import {
+  children, childSessions, registerEntries, registerNotes, accidentForms,
+  staffDailyAttendance, buildingVisitors, users,
+} from '@/lib/db/schema'
+import { eq, and, inArray, isNull, asc } from 'drizzle-orm'
 import { format } from 'date-fns'
 import RegisterClient from './RegisterClient'
 
@@ -18,17 +21,21 @@ export default async function RegisterPage() {
     .from(childSessions)
     .innerJoin(children, eq(childSessions.childId, children.id))
     .where(and(eq(childSessions.day, dayName), eq(children.archived, false)))
-    .orderBy(children.firstName)
+    .orderBy(asc(children.dateOfBirth))
 
-  const existingEntries = await db
-    .select()
-    .from(registerEntries)
-    .where(eq(registerEntries.date, todayStr))
-
-  const todayNotes = await db
-    .select()
-    .from(registerNotes)
-    .where(eq(registerNotes.date, todayStr))
+  const [
+    existingEntries,
+    todayNotes,
+    staffAttendanceToday,
+    visitorsToday,
+    allStaff,
+  ] = await Promise.all([
+    db.select().from(registerEntries).where(eq(registerEntries.date, todayStr)),
+    db.select().from(registerNotes).where(eq(registerNotes.date, todayStr)),
+    db.select().from(staffDailyAttendance).where(eq(staffDailyAttendance.date, todayStr)).orderBy(staffDailyAttendance.createdAt),
+    db.select().from(buildingVisitors).where(eq(buildingVisitors.date, todayStr)).orderBy(buildingVisitors.signedInAt),
+    db.select({ id: users.id, name: users.name, workingDays: users.workingDays }).from(users).orderBy(users.name),
+  ])
 
   // Unsigned accident forms for today's children
   const todayChildIds = [...new Set(attendingToday.map(r => r.child.id))]
@@ -86,6 +93,21 @@ export default async function RegisterPage() {
 
   const presentCount = existingEntries.filter(e => e.status === 'present').length
 
+  const staffRows = staffAttendanceToday.map(s => ({
+    id: s.id,
+    staffName: s.staffName,
+    signedInAt: s.signedInAt ? s.signedInAt.toISOString() : null,
+    signedOutAt: s.signedOutAt ? s.signedOutAt.toISOString() : null,
+  }))
+
+  const visitorRows = visitorsToday.map(v => ({
+    id: v.id,
+    name: v.name,
+    organisation: v.organisation,
+    signedInAt: v.signedInAt ? v.signedInAt.toISOString() : null,
+    signedOutAt: v.signedOutAt ? v.signedOutAt.toISOString() : null,
+  }))
+
   return (
     <RegisterClient
       rows={registerRows}
@@ -96,6 +118,10 @@ export default async function RegisterPage() {
       userId={session?.user?.id ?? ''}
       userName={session?.user?.name ?? session?.user?.email ?? ''}
       initialNotes={noteMap}
+      staffAttendance={staffRows}
+      visitors={visitorRows}
+      allStaff={allStaff}
+      needsStaffSignIn={staffAttendanceToday.length === 0}
     />
   )
 }
