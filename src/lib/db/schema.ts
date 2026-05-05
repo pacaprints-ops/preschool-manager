@@ -162,7 +162,10 @@ export const registerEntries = pgTable('register_entries', {
   absenceReason: text('absence_reason'),
   parentContacted: boolean('parent_contacted'),
   parentContactedAt: timestamp('parent_contacted_at'),
+  signedInAt: timestamp('signed_in_at'),
   signedOutAt: timestamp('signed_out_at'),
+  droppedBy: text('dropped_by'),
+  rule48h: boolean('rule_48h').notNull().default(false),
   markedById: uuid('marked_by_id').references(() => users.id),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
@@ -274,6 +277,8 @@ export const registerNotes = pgTable('register_notes', {
   sessionType: sessionTypeEnum('session_type').notNull(),
   note: text('note').notNull(),
   addedById: uuid('added_by_id').references(() => users.id),
+  completed: boolean('completed').notNull().default(false),
+  completedByName: text('completed_by_name'),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })
 

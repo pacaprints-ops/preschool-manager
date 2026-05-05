@@ -1,8 +1,8 @@
 'use server'
 
 import { db } from '@/lib/db'
-import { registerEntries, registerNotes, lateFeeInvoices } from '@/lib/db/schema'
-import { and, eq, isNull } from 'drizzle-orm'
+import { registerEntries, registerNotes, lateFeeInvoices, childSessions } from '@/lib/db/schema'
+import { and, eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 
 type MarkAttendanceInput = {
@@ -50,6 +50,8 @@ export async function markAttendance(input: MarkAttendanceInput) {
     .limit(1)
 
   if (existing.length > 0) {
+    // Only set signedInAt if marking present for the first time (preserve original arrival time)
+    const signedInAt = status === 'present' && !existing[0].signedInAt ? new Date() : undefined
     await db
       .update(registerEntries)
       .set({
@@ -58,6 +60,7 @@ export async function markAttendance(input: MarkAttendanceInput) {
         parentContacted: status === 'absent' ? parentContacted : null,
         parentContactedAt,
         markedById: userId || null,
+        ...(signedInAt !== undefined ? { signedInAt } : {}),
       })
       .where(eq(registerEntries.id, existing[0].id))
   } else {
@@ -70,9 +73,29 @@ export async function markAttendance(input: MarkAttendanceInput) {
       parentContacted: status === 'absent' ? parentContacted : null,
       parentContactedAt,
       markedById: userId || null,
+      signedInAt: status === 'present' ? new Date() : null,
     })
   }
 
+  revalidatePath('/register')
+}
+
+export async function saveDroppedBy(
+  childId: string,
+  sessionType: 'morning' | 'afternoon' | 'full_day',
+  date: string,
+  droppedBy: string,
+) {
+  await db
+    .update(registerEntries)
+    .set({ droppedBy: droppedBy.trim() || null })
+    .where(
+      and(
+        eq(registerEntries.childId, childId),
+        eq(registerEntries.sessionType, sessionType),
+        eq(registerEntries.date, date),
+      )
+    )
   revalidatePath('/register')
 }
 
@@ -127,28 +150,6 @@ export async function signOutChild(
   revalidatePath('/admin/invoicing')
 }
 
-export async function signOutAll(
-  rows: { childId: string; sessionType: 'morning' | 'afternoon' | 'full_day' }[],
-  date: string,
-) {
-  // Sign everyone out at exactly 15:00 — no late fees
-  const signedOutAt = new Date(`${date}T15:00:00`)
-  for (const { childId, sessionType } of rows) {
-    await db
-      .update(registerEntries)
-      .set({ signedOutAt })
-      .where(
-        and(
-          eq(registerEntries.childId, childId),
-          eq(registerEntries.sessionType, sessionType),
-          eq(registerEntries.date, date),
-          isNull(registerEntries.signedOutAt),
-        )
-      )
-  }
-  revalidatePath('/register')
-}
-
 export async function saveRegisterNote(
   childId: string,
   sessionType: 'morning' | 'afternoon' | 'full_day',
@@ -185,6 +186,77 @@ export async function saveRegisterNote(
       note: note.trim(),
       addedById: userId || null,
     })
+  }
+
+  revalidatePath('/register')
+}
+
+export async function setNoteCompleted(
+  childId: string,
+  sessionType: 'morning' | 'afternoon' | 'full_day',
+  date: string,
+  completed: boolean,
+  completedByName: string | null,
+) {
+  await db
+    .update(registerNotes)
+    .set({ completed, completedByName: completed ? completedByName : null, updatedAt: new Date() })
+    .where(
+      and(
+        eq(registerNotes.childId, childId),
+        eq(registerNotes.sessionType, sessionType),
+        eq(registerNotes.date, date),
+      )
+    )
+  revalidatePath('/register')
+}
+
+const SCHOOL_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const
+
+export async function apply48HourRule(childId: string, absenceDate: string) {
+  const next = new Date(absenceDate + 'T12:00:00')
+  next.setDate(next.getDate() + 1)
+  const nextDateStr = next.toISOString().slice(0, 10)
+  const allDays = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+  const nextDayName = allDays[next.getDay()]
+
+  if (!SCHOOL_DAYS.includes(nextDayName as typeof SCHOOL_DAYS[number])) return
+
+  const sessions = await db
+    .select()
+    .from(childSessions)
+    .where(and(
+      eq(childSessions.childId, childId),
+      eq(childSessions.day, nextDayName as typeof SCHOOL_DAYS[number]),
+    ))
+
+  for (const session of sessions) {
+    const existing = await db
+      .select()
+      .from(registerEntries)
+      .where(and(
+        eq(registerEntries.childId, childId),
+        eq(registerEntries.sessionType, session.sessionType),
+        eq(registerEntries.date, nextDateStr),
+      ))
+      .limit(1)
+
+    if (existing.length > 0) {
+      if (existing[0].status !== 'absent') {
+        await db.update(registerEntries)
+          .set({ status: 'absent', absenceReason: 'Sick (48hr rule)', rule48h: true })
+          .where(eq(registerEntries.id, existing[0].id))
+      }
+    } else {
+      await db.insert(registerEntries).values({
+        childId,
+        sessionType: session.sessionType,
+        date: nextDateStr,
+        status: 'absent',
+        absenceReason: 'Sick (48hr rule)',
+        rule48h: true,
+      })
+    }
   }
 
   revalidatePath('/register')

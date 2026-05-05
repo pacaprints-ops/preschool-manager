@@ -47,7 +47,11 @@ export default async function RegisterPage() {
   )
 
   const noteMap = Object.fromEntries(
-    todayNotes.map(n => [`${n.childId}-${n.sessionType}`, n.note])
+    todayNotes.map(n => [`${n.childId}-${n.sessionType}`, {
+      note: n.note,
+      completed: n.completed,
+      completedByName: n.completedByName,
+    }])
   )
 
   const registerRows = attendingToday.map(({ child, session: s }) => {
@@ -70,7 +74,10 @@ export default async function RegisterPage() {
         parentContactedDate: entry.parentContactedAt
           ? entry.parentContactedAt.toISOString().slice(0, 10)
           : null,
+        signedInAt: entry.signedInAt ? entry.signedInAt.toISOString() : null,
         signedOutAt: entry.signedOutAt ? entry.signedOutAt.toISOString() : null,
+        droppedBy: entry.droppedBy ?? null,
+        rule48h: entry.rule48h,
       } : null,
       sessionNote: noteMap[`${child.id}-${s.sessionType}`] ?? null,
       hasUnsignedAccident: unsignedChildIds.has(child.id),
@@ -87,6 +94,7 @@ export default async function RegisterPage() {
       presentCount={presentCount}
       totalCount={registerRows.length}
       userId={session?.user?.id ?? ''}
+      userName={session?.user?.name ?? session?.user?.email ?? ''}
       initialNotes={noteMap}
     />
   )

@@ -113,6 +113,21 @@ export default async function ChildProfilePage({
   const termSicknessPercent = termTotal > 0 ? Math.round((termAbsences / termTotal) * 100) : null
   const yearSicknessPercent = yearTotal > 0 ? Math.round((yearAbsences / yearTotal) * 100) : null
 
+  const calendarEntries = currentTerm ? (await db.select().from(registerEntries).where(
+    and(
+      eq(registerEntries.childId, id),
+      gte(registerEntries.date, currentTerm.startDate),
+      lte(registerEntries.date, currentTerm.endDate)
+    )
+  )).map(e => ({
+    date: e.date,
+    status: e.status,
+    absenceReason: e.absenceReason,
+    signedOutAt: e.signedOutAt ? e.signedOutAt.toISOString() : null,
+  })) : []
+
+  const enrolledDays = childSessionsData.map(s => s.day)
+
   return (
     <div className="max-w-3xl">
       <div className="flex items-start justify-between mb-6">
@@ -158,6 +173,9 @@ export default async function ChildProfilePage({
           termTotal={termTotal}
           yearAbsences={yearAbsences}
           yearTotal={yearTotal}
+          term={currentTerm ? { name: currentTerm.name, startDate: currentTerm.startDate, endDate: currentTerm.endDate } : null}
+          termEntries={calendarEntries}
+          enrolledDays={enrolledDays}
         />
         <ChildInfoSection child={child} staff={allStaff} defaultEditing={edit === '1'} />
         <SiblingsSection childId={id} siblings={siblings} allChildren={allChildren} />

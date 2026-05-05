@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { markAttendance, saveRegisterNote, signOutChild, signOutAll } from './actions'
+import { markAttendance, saveRegisterNote, signOutChild, saveDroppedBy, apply48HourRule, setNoteCompleted as saveNoteCompleted } from './actions'
 
 type RegisterRow = {
   childId: string
@@ -13,7 +13,7 @@ type RegisterRow = {
   hasAllergies: boolean
   allergies: string | null
   medicalNotes: string | null
-  sessionNote: string | null
+  sessionNote: { note: string; completed: boolean; completedByName: string | null } | null
   hasUnsignedAccident: boolean
   existing: {
     id: string
@@ -21,7 +21,10 @@ type RegisterRow = {
     absenceReason: string | null
     parentContacted: boolean | null
     parentContactedDate: string | null
+    signedInAt: string | null
     signedOutAt: string | null
+    droppedBy: string | null
+    rule48h: boolean
   } | null
 }
 
@@ -56,34 +59,51 @@ function RatioWidget({ rows, statuses }: {
   const sessionTypes = [...new Set(rows.map(r => r.sessionType))] as ('morning' | 'afternoon' | 'full_day')[]
 
   return (
-    <div className="mb-4 bg-white rounded-xl border border-gray-200 p-3 print:hidden">
-      <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Staff ratios</div>
-      <div className={`grid gap-3 ${sessionTypes.length === 1 ? 'grid-cols-1' : sessionTypes.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+    <div className="mb-4 bg-white rounded-xl border border-gray-200 px-3 py-2.5 print:hidden">
+      <div className={`grid gap-4 ${sessionTypes.length === 1 ? 'grid-cols-1' : sessionTypes.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
         {sessionTypes.map(st => {
           const sessionRows = rows.filter(r => r.sessionType === st)
-          const expected = calcStaff(sessionRows)
+          const exp = calcStaff(sessionRows)
           const presentRows = sessionRows.filter(r => statuses[`${r.childId}-${r.sessionType}`] === 'present')
           const live = calcStaff(presentRows)
+          const show1to1 = exp.count1to1 > 0 || live.count1to1 > 0
+
           return (
-            <div key={st} className="bg-gray-50 rounded-lg p-2.5">
-              <div className="text-xs text-gray-500 font-medium mb-1.5">{SESSION_LABELS[st]}</div>
-              <div className="flex items-end justify-between gap-2">
-                <div>
-                  <div className="text-xs text-gray-400">Expected</div>
-                  <div className="text-lg font-bold text-gray-500">{expected.staff} <span className="text-xs font-normal">staff</span></div>
-                  <div className="text-xs text-gray-400">{sessionRows.length} children</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs text-[#020e2f] font-medium">Live</div>
-                  <div className="text-lg font-bold text-[#020e2f]">{live.staff} <span className="text-xs font-normal">staff</span></div>
-                  <div className="text-xs text-gray-400">{presentRows.length} present</div>
-                </div>
-              </div>
-              {(expected.count1to1 > 0 || live.count1to1 > 0) && (
-                <div className="mt-1.5 pt-1.5 border-t border-gray-200 text-xs text-purple-600 font-medium">
-                  {live.count1to1}/{expected.count1to1} × 1-2-1 present
-                </div>
-              )}
+            <div key={st}>
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{SESSION_LABELS[st]}</div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr>
+                    <th className="text-left font-normal text-gray-400 pb-0.5 w-full" />
+                    <th className="text-right font-medium text-gray-400 pb-0.5 pr-3 whitespace-nowrap">Exp</th>
+                    <th className="text-right font-medium text-[#020e2f] pb-0.5 whitespace-nowrap">Live</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="text-gray-500 py-0.5">2yr <span className="text-gray-300">1:4</span></td>
+                    <td className="text-right text-gray-500 pr-3 py-0.5">{exp.count2yr}</td>
+                    <td className="text-right font-semibold text-gray-800 py-0.5">{live.count2yr}</td>
+                  </tr>
+                  <tr>
+                    <td className="text-gray-500 py-0.5">3–4yr <span className="text-gray-300">1:8</span></td>
+                    <td className="text-right text-gray-500 pr-3 py-0.5">{exp.count34yr}</td>
+                    <td className="text-right font-semibold text-gray-800 py-0.5">{live.count34yr}</td>
+                  </tr>
+                  {show1to1 && (
+                    <tr>
+                      <td className="text-purple-500 py-0.5">1-2-1</td>
+                      <td className="text-right text-gray-500 pr-3 py-0.5">{exp.count1to1}</td>
+                      <td className="text-right font-semibold text-purple-600 py-0.5">{live.count1to1}</td>
+                    </tr>
+                  )}
+                  <tr className="border-t border-gray-100">
+                    <td className="text-gray-700 font-semibold pt-1">Staff</td>
+                    <td className="text-right text-gray-500 font-semibold pr-3 pt-1">{exp.staff}</td>
+                    <td className="text-right font-bold text-[#020e2f] pt-1">{live.staff}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           )
         })}
@@ -107,6 +127,7 @@ export default function RegisterClient({
   presentCount: initialPresentCount,
   totalCount,
   userId,
+  userName,
   initialNotes,
 }: {
   rows: RegisterRow[]
@@ -115,7 +136,8 @@ export default function RegisterClient({
   presentCount: number
   totalCount: number
   userId: string
-  initialNotes: Record<string, string>
+  userName: string
+  initialNotes: Record<string, { note: string; completed: boolean; completedByName: string | null }>
 }) {
   const [statuses, setStatuses] = useState<Record<string, 'present' | 'absent' | null>>(
     Object.fromEntries(rows.map(r => [`${r.childId}-${r.sessionType}`, r.existing?.status ?? null]))
@@ -135,15 +157,29 @@ export default function RegisterClient({
   const [loading, setLoading] = useState<Record<string, boolean>>({})
   const [expandedAbsence, setExpandedAbsence] = useState<Record<string, boolean>>({})
   const [notes, setNotes] = useState<Record<string, string>>(
-    Object.fromEntries(rows.map(r => [`${r.childId}-${r.sessionType}`, r.sessionNote ?? '']))
+    Object.fromEntries(rows.map(r => [`${r.childId}-${r.sessionType}`, r.sessionNote?.note ?? '']))
+  )
+  const [noteCompleted, setNoteCompleted] = useState<Record<string, boolean>>(
+    Object.fromEntries(rows.map(r => [`${r.childId}-${r.sessionType}`, r.sessionNote?.completed ?? false]))
+  )
+  const [noteCompletedBy, setNoteCompletedBy] = useState<Record<string, string | null>>(
+    Object.fromEntries(rows.map(r => [`${r.childId}-${r.sessionType}`, r.sessionNote?.completedByName ?? null]))
   )
   const [showNote, setShowNote] = useState<Record<string, boolean>>({})
   const [savingNote, setSavingNote] = useState<Record<string, boolean>>({})
+  const [signedInTimes, setSignedInTimes] = useState<Record<string, string | null>>(
+    Object.fromEntries(rows.map(r => [`${r.childId}-${r.sessionType}`, r.existing?.signedInAt ?? null]))
+  )
   const [signedOutTimes, setSignedOutTimes] = useState<Record<string, string | null>>(
     Object.fromEntries(rows.map(r => [`${r.childId}-${r.sessionType}`, r.existing?.signedOutAt ?? null]))
   )
+  const [droppedByValues, setDroppedByValues] = useState<Record<string, string>>(
+    Object.fromEntries(rows.map(r => [`${r.childId}-${r.sessionType}`, r.existing?.droppedBy ?? '']))
+  )
+  const [is48h, setIs48h] = useState<Record<string, boolean>>({})
+  const [savingAbsence, setSavingAbsence] = useState<Record<string, boolean>>({})
   const [signingOut, setSigningOut] = useState<Record<string, boolean>>({})
-  const [endingSession, setEndingSession] = useState(false)
+  const [endSessionWarning, setEndSessionWarning] = useState(0)
 
   const presentCount = Object.values(statuses).filter(s => s === 'present').length
 
@@ -195,16 +231,15 @@ export default function RegisterClient({
     setSigningOut(s => ({ ...s, [key]: false }))
   }
 
-  async function handleEndSession() {
-    setEndingSession(true)
-    const toSignOut = rows
-      .filter(r => statuses[`${r.childId}-${r.sessionType}`] === 'present' && !signedOutTimes[`${r.childId}-${r.sessionType}`])
-      .map(r => ({ childId: r.childId, sessionType: r.sessionType }))
-    toSignOut.forEach(({ childId, sessionType }) => {
-      setSignedOutTimes(t => ({ ...t, [`${childId}-${sessionType}`]: '15:00' }))
-    })
-    await signOutAll(toSignOut, todayStr)
-    setEndingSession(false)
+  function handleEndSession() {
+    const remaining = rows.filter(
+      r => statuses[`${r.childId}-${r.sessionType}`] === 'present' && !signedOutTimes[`${r.childId}-${r.sessionType}`]
+    )
+    if (remaining.length > 0) {
+      setEndSessionWarning(remaining.length)
+      return
+    }
+    setEndSessionWarning(0)
   }
 
   async function handleMark(childId: string, sessionType: string, status: 'present' | 'absent') {
@@ -212,6 +247,9 @@ export default function RegisterClient({
     setLoading(l => ({ ...l, [key]: true }))
     const newStatus = statuses[key] === status ? null : status
     setStatuses(s => ({ ...s, [key]: newStatus }))
+    if (status === 'present' && newStatus === 'present' && !signedInTimes[key]) {
+      setSignedInTimes(t => ({ ...t, [key]: localTimeNow() }))
+    }
     if (status === 'absent') {
       setExpandedAbsence(e => ({ ...e, [key]: newStatus === 'absent' }))
     } else {
@@ -219,6 +257,18 @@ export default function RegisterClient({
     }
     await save(childId, sessionType, { status: newStatus })
     setLoading(l => ({ ...l, [key]: false }))
+  }
+
+  async function handleSaveAbsence(childId: string, sessionType: 'morning' | 'afternoon' | 'full_day') {
+    const key = `${childId}-${sessionType}`
+    setSavingAbsence(s => ({ ...s, [key]: true }))
+    await save(childId, sessionType)
+    if (is48h[key]) {
+      await apply48HourRule(childId, todayStr)
+      setIs48h(v => ({ ...v, [key]: false }))
+    }
+    setExpandedAbsence(e => ({ ...e, [key]: false }))
+    setSavingAbsence(s => ({ ...s, [key]: false }))
   }
 
   if (rows.length === 0) {
@@ -259,11 +309,10 @@ export default function RegisterClient({
           </div>
           <button
             onClick={handleEndSession}
-            disabled={endingSession}
-            title="Sign out all remaining present children at 3:00pm"
-            className="px-3 py-2 bg-gray-700 text-white text-xs font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 print:hidden"
+            title="End the session — all children must be individually signed out first"
+            className="px-3 py-2 bg-gray-700 text-white text-xs font-medium rounded-lg hover:bg-gray-800 print:hidden"
           >
-            {endingSession ? 'Signing out…' : 'End session'}
+            End session
           </button>
           <button
             onClick={() => window.print()}
@@ -274,6 +323,12 @@ export default function RegisterClient({
           </button>
         </div>
       </div>
+
+      {endSessionWarning > 0 && (
+        <div className="mb-4 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 text-sm text-amber-800 print:hidden">
+          <strong>{endSessionWarning} {endSessionWarning === 1 ? 'child is' : 'children are'} still signed in</strong> — please sign {endSessionWarning === 1 ? 'them' : 'each of them'} out individually so the correct time and any late fees are recorded.
+        </div>
+      )}
 
       {/* Ratio widget */}
       <RatioWidget rows={rows} statuses={statuses} />
@@ -287,6 +342,8 @@ export default function RegisterClient({
           const contacted = parentContacted[key]
           const hasNote = !!(notes[key]?.trim())
           const noteOpen = showNote[key] || false
+          const signedIn = signedInTimes[key]
+          const signedInDisplay = signedIn ? formatSignOutTime(signedIn) : null
           const signedOut = signedOutTimes[key]
           const signedOutDisplay = signedOut ? formatSignOutTime(signedOut) : null
           const lateMinutes = signedOutDisplay ? minutesLateFromTime(signedOutDisplay) : 0
@@ -317,10 +374,19 @@ export default function RegisterClient({
                         ✎ Accident unsigned
                       </span>
                     )}
+                    {row.existing?.rule48h && status === 'absent' && (
+                      <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 text-xs font-medium px-2 py-0.5 rounded-full">
+                        48hr rule
+                      </span>
+                    )}
                     {/* Note indicator — shown inline when note exists and box is closed */}
                     {hasNote && !noteOpen && (
-                      <span className="text-xs text-[#020e2f] bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full font-medium truncate max-w-[180px]">
-                        📋 {notes[key]}
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium truncate max-w-[180px] ${
+                        noteCompleted[key]
+                          ? 'bg-green-50 border border-green-300 text-green-700'
+                          : 'bg-blue-50 border border-blue-200 text-[#020e2f]'
+                      }`}>
+                        {noteCompleted[key] ? '✓ Note' : '📋'} {notes[key]}
                       </span>
                     )}
                   </div>
@@ -328,6 +394,11 @@ export default function RegisterClient({
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap justify-end">
+                  {/* Sign-in time — shown once logged */}
+                  {status === 'present' && signedInDisplay && (
+                    <span className="text-xs text-gray-500">In: <span className="font-medium text-gray-700">{signedInDisplay}</span></span>
+                  )}
+
                   {/* Sign-out display or button — only for present children */}
                   {status === 'present' && (
                     signedOutDisplay ? (
@@ -401,6 +472,29 @@ export default function RegisterClient({
                     placeholder="Add a note for this session..."
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700 resize-none"
                   />
+
+                  {/* Completed checkbox — only shown when a note exists */}
+                  {hasNote && (
+                    <label className="flex items-center gap-2 mt-2 text-sm text-gray-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={noteCompleted[key] ?? false}
+                        onChange={async e => {
+                          const checked = e.target.checked
+                          const byName = checked ? userName : null
+                          setNoteCompleted(c => ({ ...c, [key]: checked }))
+                          setNoteCompletedBy(b => ({ ...b, [key]: byName }))
+                          await saveNoteCompleted(row.childId, row.sessionType, todayStr, checked, byName)
+                        }}
+                        className="rounded"
+                      />
+                      Completed
+                      {noteCompleted[key] && noteCompletedBy[key] && (
+                        <span className="text-xs text-gray-400 font-normal">by {noteCompletedBy[key]}</span>
+                      )}
+                    </label>
+                  )}
+
                   <div className="flex gap-2 mt-2">
                     <button
                       onClick={() => handleSaveNote(row.childId, row.sessionType)}
@@ -423,14 +517,28 @@ export default function RegisterClient({
                     <button
                       onClick={() => {
                         setShowNote(s => ({ ...s, [key]: false }))
-                        // Reset unsaved changes
-                        setNotes(n => ({ ...n, [key]: row.sessionNote ?? '' }))
+                        setNotes(n => ({ ...n, [key]: row.sessionNote?.note ?? '' }))
                       }}
                       className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600"
                     >
                       Cancel
                     </button>
                   </div>
+                </div>
+              )}
+
+              {/* Dropped by — shown for present children */}
+              {status === 'present' && (
+                <div className="px-4 pb-3 pt-2 border-t border-green-100">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Dropped by</label>
+                  <input
+                    type="text"
+                    value={droppedByValues[key] ?? ''}
+                    onChange={e => setDroppedByValues(v => ({ ...v, [key]: e.target.value }))}
+                    onBlur={() => saveDroppedBy(row.childId, row.sessionType, todayStr, droppedByValues[key] ?? '')}
+                    placeholder="e.g. Mum, Dad, Grandma..."
+                    className="w-full max-w-xs border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-300"
+                  />
                 </div>
               )}
 
@@ -442,7 +550,6 @@ export default function RegisterClient({
                       type="text"
                       value={absenceReasons[key] ?? ''}
                       onChange={e => setAbsenceReasons(r => ({ ...r, [key]: e.target.value }))}
-                      onBlur={() => save(row.childId, row.sessionType)}
                       placeholder="e.g. Unwell, family holiday..."
                       className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-red-300"
                     />
@@ -456,9 +563,7 @@ export default function RegisterClient({
                         onChange={e => {
                           const checked = e.target.checked
                           setParentContacted(p => ({ ...p, [key]: checked }))
-                          // If unchecked, reset date to today
                           if (!checked) setParentContactedDates(d => ({ ...d, [key]: todayStr }))
-                          setTimeout(() => save(row.childId, row.sessionType, { parentContacted: checked }), 0)
                         }}
                         className="rounded"
                       />
@@ -471,16 +576,30 @@ export default function RegisterClient({
                         <input
                           type="date"
                           value={parentContactedDates[key] ?? todayStr}
-                          onChange={e => {
-                            const d = e.target.value
-                            setParentContactedDates(pd => ({ ...pd, [key]: d }))
-                            save(row.childId, row.sessionType, { parentContactedDate: d })
-                          }}
+                          onChange={e => setParentContactedDates(pd => ({ ...pd, [key]: e.target.value }))}
                           className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 bg-white"
                         />
                       </div>
                     )}
                   </div>
+
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={is48h[key] ?? false}
+                      onChange={e => setIs48h(v => ({ ...v, [key]: e.target.checked }))}
+                      className="rounded"
+                    />
+                    48-hour sick rule <span className="text-xs text-gray-400 font-normal">(auto-marks child absent tomorrow)</span>
+                  </label>
+
+                  <button
+                    onClick={() => handleSaveAbsence(row.childId, row.sessionType)}
+                    disabled={savingAbsence[key]}
+                    className="px-3 py-1.5 bg-[#020e2f] text-white text-xs rounded-lg hover:bg-[#010922] disabled:opacity-50"
+                  >
+                    {savingAbsence[key] ? 'Saving…' : 'Save'}
+                  </button>
                 </div>
               )}
             </div>
