@@ -8,7 +8,7 @@ import { signOut } from 'next-auth/react'
 const navLinks = [
   { href: '/register', label: 'Register' },
   { href: '/children', label: 'Children' },
-  { href: '/admin/ratios', label: 'Ratios' },
+  { href: '/admin/ratios', label: 'Termly Register' },
 ]
 const adminLinks = [
   { href: '/waiting-list', label: 'Waiting List' },

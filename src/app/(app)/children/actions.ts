@@ -419,3 +419,9 @@ export async function deleteChildHoliday(id: string, childId: string) {
   revalidatePath(`/children/${childId}`)
   revalidatePath('/register')
 }
+
+// ─── Termly register funding flags ───────────────────────────────────────────
+
+export async function updateChildFundingFlag(childId: string, field: 'dep' | 'eypp' | 'sen', value: boolean) {
+  await db.update(children).set({ [field]: value }).where(eq(children.id, childId))
+}

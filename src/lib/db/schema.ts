@@ -94,6 +94,10 @@ export const children = pgTable('children', {
   consumableConsent: boolean('consumable_consent').notNull().default(false),
   // 1-2-1 keyworker requirement (EHCP / additional needs)
   needs1to1: boolean('needs_1to1').notNull().default(false),
+  // Funding / needs flags for termly register
+  dep: boolean('dep').notNull().default(false),
+  eypp: boolean('eypp').notNull().default(false),
+  sen: boolean('sen').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
