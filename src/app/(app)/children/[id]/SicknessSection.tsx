@@ -195,17 +195,27 @@ export default function SicknessSection({ allTerms, allEntries, enrolledDays }: 
   const [selectedIdx, setSelectedIdx] = useState(Math.max(0, defaultIdx))
   const [showLog, setShowLog] = useState(true)
 
-  if (allTerms.length === 0) return null
+  // Always render the card — show helpful messages if data is missing
+  if (allTerms.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <h2 className="text-sm font-semibold text-gray-700 mb-2">Attendance</h2>
+        <p className="text-sm text-gray-400">
+          No terms set up yet.{' '}
+          <a href="/admin/terms" className="text-[#020e2f] underline">Add terms in Admin</a>{' '}
+          to track attendance.
+        </p>
+      </div>
+    )
+  }
 
-  const selectedTerm = allTerms[selectedIdx]
+  const selectedTerm = allTerms[selectedIdx] ?? allTerms[0]
   const stats = termStats(selectedTerm, allEntries)
 
   const { start: yearStart, end: yearEnd } = currentAcademicYearBounds()
   const yearEntries = allEntries.filter(e => e.date >= yearStart && e.date <= yearEnd)
   const yearAbsences = yearEntries.filter(e => e.status === 'absent').length
   const yearPct = yearEntries.length > 0 ? Math.round((yearAbsences / yearEntries.length) * 100) : null
-
-  if (allEntries.length === 0 && yearEntries.length === 0) return null
 
   const termEntries = allEntries.filter(e => e.date >= selectedTerm.startDate && e.date <= selectedTerm.endDate)
 
