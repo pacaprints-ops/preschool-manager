@@ -26,6 +26,7 @@ export default function HolidaySection({
   holidays: Holiday[]
   enrolledDays: string[]
 }) {
+  const [open, setOpen] = useState(false)
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [notes, setNotes] = useState('')
@@ -72,7 +73,14 @@ export default function HolidaySection({
       </div>
 
       {/* Add holiday form */}
-      <div className="border-t border-gray-100 pt-4 space-y-3">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="text-xs text-[#020e2f] font-medium hover:underline flex items-center gap-1"
+      >
+        {open ? '▾ Hide' : '▸ Log a holiday'}
+      </button>
+
+      {open && <div className="border-t border-gray-100 pt-4 space-y-3">
         <div className="flex gap-3">
           <div className="flex-1">
             <label className="block text-xs text-gray-500 mb-1">Start date</label>
@@ -111,7 +119,7 @@ export default function HolidaySection({
         </div>
 
         {error && <p className="text-xs text-red-500">{error}</p>}
-      </div>
+      </div>}
     </div>
   )
 }
