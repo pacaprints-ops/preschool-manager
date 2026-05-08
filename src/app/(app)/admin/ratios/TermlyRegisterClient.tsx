@@ -88,7 +88,7 @@ export default function TermlyRegisterClient({
   })
 
   // Sort age groups oldest first, within each group sort by DOB asc (oldest child first)
-  const allAges = [...new Set(enriched.map(c => c.ageAtTerm))].sort((a, b) => b - a)
+  const allAges = [...new Set(enriched.map(c => c.ageAtTerm))].sort((a, b) => a - b)
   const ageGroups = allAges.map(age => ({
     age,
     label: `${age} Year Old${age !== 1 ? 's' : ''}`,
