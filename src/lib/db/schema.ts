@@ -325,6 +325,22 @@ export const buildingVisitors = pgTable('building_visitors', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
+// ─── Staff monthly timesheet summary ─────────────────────────────────────────
+
+export const staffMonthlyTimesheets = pgTable('staff_monthly_timesheets', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  year: integer('year').notNull(),
+  month: integer('month').notNull(), // 1–12
+  additionalHours: numeric('additional_hours', { precision: 6, scale: 2 }),
+  additionalHoursNotes: text('additional_hours_notes'),
+  totalKeyChildren: integer('total_key_children'),
+  totalExtraHours: numeric('total_extra_hours', { precision: 6, scale: 2 }),
+  totalPay: numeric('total_pay', { precision: 10, scale: 2 }),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
 // ─── Child siblings (junction) ────────────────────────────────────────────────
 
 export const childSiblings = pgTable('child_siblings', {

@@ -1,18 +1,37 @@
 'use client'
 
-import { useState } from 'react'
-import { addSickness, deleteSickness, addTraining, deleteTraining, updateWorkingDays, updateDBS, addTimesheetEntry, deleteTimesheetEntry } from './actions'
+import { useState, useEffect } from 'react'
+import {
+  addSickness, deleteSickness, addTraining, deleteTraining,
+  updateWorkingDays, updateDBS, saveMonthlyTimesheetData,
+} from './actions'
 
-type StaffMember = { id: string; name: string; email: string; role: string; workingDays: string; dbsCertNumber: string | null; dbsIssueDate: string | null; dbsOnUpdateService: boolean }
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type StaffMember = {
+  id: string; name: string; email: string; role: string
+  workingDays: string; dbsCertNumber: string | null
+  dbsIssueDate: string | null; dbsOnUpdateService: boolean
+}
 type Sickness = { id: string; userId: string; startDate: string; endDate: string | null; reason: string | null; notes: string | null }
 type Training = { id: string; userId: string; trainingName: string; completedDate: string; expiryDate: string | null; notes: string | null }
 type HoursLogEntry = { id: string; userId: string | null; date: string; signedInAt: string | null; signedOutAt: string | null }
 type TimesheetEntry = { id: string; userId: string; date: string; timeIn: string | null; timeOut: string | null; hoursWorked: string; notes: string | null }
+type MonthlyTimesheet = {
+  id: string; userId: string; year: number; month: number
+  additionalHours: string | null; additionalHoursNotes: string | null
+  totalKeyChildren: number | null; totalExtraHours: string | null
+  totalPay: string | null; notes: string | null
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const ALL_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri'] as const
 const DAY_LABEL: Record<string, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri' }
-
+const DAY_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
 const inp = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700'
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function daysUntilExpiry(dateStr: string | null): number | null {
   if (!dateStr) return null
@@ -38,27 +57,327 @@ function calcHoursFromTimes(timeIn: string | null, timeOut: string | null): numb
   return mins > 0 ? Math.round(mins / 60 * 100) / 100 : null
 }
 
-// Compare timesheet entry against the logged sign-in/out for same date/user
-function discrepancyMinutes(
-  sheet: TimesheetEntry,
-  log: HoursLogEntry | undefined,
-): number | null {
-  if (!log) return null
-  const logIn = fmtUTCTime(log.signedInAt)
-  const logOut = fmtUTCTime(log.signedOutAt)
-  if (!logIn || !logOut || !sheet.timeIn || !sheet.timeOut) return null
-  const logMins = calcHoursFromTimes(logIn, logOut)
-  const sheetMins = calcHoursFromTimes(sheet.timeIn, sheet.timeOut)
-  if (logMins === null || sheetMins === null) return null
-  return Math.abs(logMins - sheetMins) * 60
+function dateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-export default function StaffClient({ staff, sickness, training, hoursLog, timesheets }: {
+function getWeeksInMonth(year: number, month: number): Date[][] {
+  const monthStart = new Date(year, month - 1, 1)
+  const monthEnd = new Date(year, month, 0)
+  const monthEndStr = dateStr(monthEnd)
+
+  const firstMonday = new Date(monthStart)
+  const dow = firstMonday.getDay()
+  firstMonday.setDate(firstMonday.getDate() - (dow === 0 ? 6 : dow - 1))
+
+  const weeks: Date[][] = []
+  const cur = new Date(firstMonday)
+
+  while (true) {
+    const week: Date[] = []
+    for (let i = 0; i < 5; i++) {
+      week.push(new Date(cur))
+      cur.setDate(cur.getDate() + 1)
+    }
+    cur.setDate(cur.getDate() + 2)
+    const inMonth = week.some(d => d.getMonth() === month - 1 && d.getFullYear() === year)
+    if (inMonth) weeks.push(week)
+    if (dateStr(week[4]) >= monthEndStr) break
+  }
+  return weeks
+}
+
+// ─── Timesheet Panel ──────────────────────────────────────────────────────────
+
+function TimesheetPanel({ member, timesheets, hoursLog, monthlyData }: {
+  member: StaffMember
+  timesheets: TimesheetEntry[]
+  hoursLog: HoursLogEntry[]
+  monthlyData: MonthlyTimesheet[]
+}) {
+  const now = new Date()
+  const [year, setYear] = useState(now.getFullYear())
+  const [month, setMonth] = useState(now.getMonth() + 1)
+  const [dailyHours, setDailyHours] = useState<Record<string, string>>({})
+  const [summary, setSummary] = useState({
+    additionalHours: '', additionalHoursNotes: '',
+    totalKeyChildren: '', totalExtraHours: '', totalPay: '', notes: '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  const monthStr = `${year}-${String(month).padStart(2, '0')}`
+  const workingDaySet = new Set(member.workingDays.split(',').filter(Boolean))
+
+  // Sync when month/year or data changes
+  useEffect(() => {
+    const newHours: Record<string, string> = {}
+    for (const t of timesheets) {
+      if (t.date.startsWith(monthStr)) newHours[t.date] = t.hoursWorked
+    }
+    setDailyHours(newHours)
+
+    const md = monthlyData.find(m => m.year === year && m.month === month)
+    setSummary({
+      additionalHours: md?.additionalHours ?? '',
+      additionalHoursNotes: md?.additionalHoursNotes ?? '',
+      totalKeyChildren: md?.totalKeyChildren?.toString() ?? '',
+      totalExtraHours: md?.totalExtraHours ?? '',
+      totalPay: md?.totalPay ?? '',
+      notes: md?.notes ?? '',
+    })
+    setSaved(false)
+  }, [year, month, timesheets, monthlyData])
+
+  const logByDate = Object.fromEntries(hoursLog.map(h => [h.date, h]))
+
+  function logHrsForDate(ds: string): number | null {
+    const log = logByDate[ds]
+    if (!log) return null
+    return calcHoursFromTimes(fmtUTCTime(log.signedInAt), fmtUTCTime(log.signedOutAt))
+  }
+
+  const weeks = getWeeksInMonth(year, month)
+
+  const weekTotals = weeks.map(week =>
+    week.reduce((sum, day, di) => {
+      if (day.getMonth() !== month - 1 || day.getFullYear() !== year) return sum
+      const ds = dateStr(day)
+      const dayAbbr = ALL_DAYS[di]
+      if (!workingDaySet.has(dayAbbr)) return sum
+      return sum + (parseFloat(dailyHours[ds] || '0') || 0)
+    }, 0)
+  )
+
+  const regularTotal = weekTotals.reduce((a, b) => a + b, 0)
+  const addHrs = parseFloat(summary.additionalHours || '0') || 0
+  const extraHrs = parseFloat(summary.totalExtraHours || '0') || 0
+  const totalMonthly = regularTotal + addHrs + extraHrs
+
+  function prevMonth() {
+    if (month === 1) { setYear(y => y - 1); setMonth(12) }
+    else setMonth(m => m - 1)
+  }
+  function nextMonth() {
+    if (month === 12) { setYear(y => y + 1); setMonth(1) }
+    else setMonth(m => m + 1)
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    const entries = Object.entries(dailyHours)
+      .filter(([date, h]) => date.startsWith(monthStr) && parseFloat(h) > 0)
+      .map(([date, h]) => {
+        const log = logByDate[date]
+        return {
+          date,
+          timeIn: fmtUTCTime(log?.signedInAt ?? null),
+          timeOut: fmtUTCTime(log?.signedOutAt ?? null),
+          hoursWorked: parseFloat(h).toFixed(2),
+        }
+      })
+    await saveMonthlyTimesheetData(member.id, year, month, entries, summary)
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2500)
+  }
+
+  const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+
+  return (
+    <div>
+      {/* Month navigator */}
+      <div className="flex items-center justify-between mb-4 bg-gray-50 rounded-xl px-3 py-2">
+        <button onClick={prevMonth} className="px-3 py-1 text-sm font-bold text-gray-600 bg-white hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors">← Prev</button>
+        <span className="text-sm font-bold text-gray-800">{monthLabel}</span>
+        <button onClick={nextMonth} className="px-3 py-1 text-sm font-bold text-gray-600 bg-white hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors">Next →</button>
+      </div>
+
+      {/* Calendar grid */}
+      <div className="overflow-x-auto -mx-4 px-4 mb-5">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="bg-gray-50">
+              {DAY_FULL.map(d => (
+                <th key={d} className="border border-gray-200 px-2 py-2 text-xs font-semibold text-gray-500 text-center">{d}</th>
+              ))}
+              <th className="border border-gray-200 px-2 py-2 text-xs font-semibold text-gray-500 text-center whitespace-nowrap">Wkly Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {weeks.map((week, wi) => (
+              <tr key={wi}>
+                {week.map((day, di) => {
+                  const inMonth = day.getMonth() === month - 1 && day.getFullYear() === year
+                  const ds = dateStr(day)
+                  const dayAbbr = ALL_DAYS[di]
+                  const isWorkingDay = workingDaySet.has(dayAbbr)
+                  const logHrs = inMonth ? logHrsForDate(ds) : null
+                  const sheetHrs = parseFloat(dailyHours[ds] || '0') || 0
+                  const hasDiscrepancy = logHrs !== null && sheetHrs > 0 && Math.abs(logHrs - sheetHrs) > 0.26
+
+                  const cellBg = !inMonth
+                    ? 'bg-gray-50'
+                    : !isWorkingDay
+                      ? 'bg-gray-50'
+                      : hasDiscrepancy
+                        ? 'bg-amber-50'
+                        : ''
+
+                  return (
+                    <td key={di} className={`border border-gray-200 p-1.5 align-top ${cellBg}`} style={{ minWidth: '72px', width: '72px' }}>
+                      {inMonth ? (
+                        <div className="min-h-[60px]">
+                          <div className="text-xs text-gray-400 text-right leading-none mb-1">{day.getDate()}</div>
+                          {isWorkingDay ? (
+                            <>
+                              <input
+                                type="number"
+                                step="0.25"
+                                min="0"
+                                max="12"
+                                value={dailyHours[ds] ?? ''}
+                                onChange={e => setDailyHours(prev => ({ ...prev, [ds]: e.target.value }))}
+                                className="w-full text-sm text-center border border-gray-200 bg-white rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                placeholder="—"
+                              />
+                              {logHrs !== null && (
+                                <div className={`text-xs text-center mt-1 ${hasDiscrepancy ? 'text-amber-600 font-semibold' : 'text-gray-300'}`}>
+                                  {hasDiscrepancy ? `⚠ ${logHrs.toFixed(2)}h` : `${logHrs.toFixed(2)}h`}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="text-xs text-gray-300 text-center mt-2">—</div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="min-h-[60px]">
+                          <div className="text-xs text-gray-200 text-right leading-none">{day.getDate()}</div>
+                        </div>
+                      )}
+                    </td>
+                  )
+                })}
+                <td className="border border-gray-200 px-3 text-sm font-bold text-gray-700 text-right align-middle whitespace-nowrap bg-gray-50">
+                  {weekTotals[wi] > 0 ? `${weekTotals[wi].toFixed(2)}h` : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="text-xs text-gray-400 mt-1.5">Small number below a cell = hours from sign-in log. ⚠ = differs by more than 15 min.</p>
+      </div>
+
+      {/* Additional hours */}
+      <div className="border border-gray-200 rounded-xl p-4 mb-4 space-y-3">
+        <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Additional Hours</h4>
+        <div className="flex gap-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Hours</label>
+            <input
+              type="number" step="0.25" min="0"
+              value={summary.additionalHours}
+              onChange={e => setSummary(s => ({ ...s, additionalHours: e.target.value }))}
+              className="w-24 border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              placeholder="0"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="block text-xs text-gray-500 mb-1">Notes (e.g. INSET day, meeting)</label>
+            <input
+              value={summary.additionalHoursNotes}
+              onChange={e => setSummary(s => ({ ...s, additionalHoursNotes: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              placeholder="Optional"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Summary totals */}
+      <div className="border border-gray-200 rounded-xl p-4 mb-4">
+        <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Monthly Summary</h4>
+        <div className="grid grid-cols-2 gap-3 mb-4 sm:grid-cols-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Total Key Children</label>
+            <input
+              type="number" min="0"
+              value={summary.totalKeyChildren}
+              onChange={e => setSummary(s => ({ ...s, totalKeyChildren: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Total Extra Hours</label>
+            <input
+              type="number" step="0.25" min="0"
+              value={summary.totalExtraHours}
+              onChange={e => setSummary(s => ({ ...s, totalExtraHours: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Total Pay (£)</label>
+            <input
+              type="number" step="0.01" min="0"
+              value={summary.totalPay}
+              onChange={e => setSummary(s => ({ ...s, totalPay: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              placeholder="0.00"
+            />
+          </div>
+        </div>
+
+        {/* Calculated totals box */}
+        <div className="bg-gray-50 rounded-lg px-4 py-3 space-y-1.5 text-sm">
+          <div className="flex justify-between text-gray-600">
+            <span>Regular hours</span>
+            <span className="font-semibold">{regularTotal.toFixed(2)}h</span>
+          </div>
+          <div className="flex justify-between text-gray-600">
+            <span>Additional hours</span>
+            <span className="font-semibold">{addHrs.toFixed(2)}h</span>
+          </div>
+          <div className="flex justify-between text-gray-600">
+            <span>Extra hours</span>
+            <span className="font-semibold">{extraHrs.toFixed(2)}h</span>
+          </div>
+          <div className="flex justify-between border-t border-gray-200 pt-1.5 font-bold text-gray-800">
+            <span>Total Monthly Hours</span>
+            <span>{totalMonthly.toFixed(2)}h</span>
+          </div>
+          {summary.totalPay && (
+            <div className="flex justify-between border-t border-gray-200 pt-1.5 font-bold">
+              <span className="text-gray-800">Total Pay</span>
+              <span className="text-green-700">£{parseFloat(summary.totalPay || '0').toFixed(2)}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className={`w-full py-2.5 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50 ${saved ? 'bg-green-600' : 'bg-blue-800 hover:bg-blue-900'}`}
+      >
+        {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save timesheet'}
+      </button>
+    </div>
+  )
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export default function StaffClient({ staff, sickness, training, hoursLog, timesheets, monthlyData }: {
   staff: StaffMember[]
   sickness: Sickness[]
   training: Training[]
   hoursLog: HoursLogEntry[]
   timesheets: TimesheetEntry[]
+  monthlyData: MonthlyTimesheet[]
 }) {
   const [selectedStaff, setSelectedStaff] = useState<string>(staff[0]?.id ?? '')
   const [activeTab, setActiveTab] = useState<'rota' | 'training' | 'sickness' | 'dbs' | 'hours' | 'timesheet'>('rota')
@@ -73,10 +392,8 @@ export default function StaffClient({ staff, sickness, training, hoursLog, times
   const [savingDbs, setSavingDbs] = useState(false)
   const [addingTraining, setAddingTraining] = useState(false)
   const [addingSickness, setAddingSickness] = useState(false)
-  const [addingTimesheet, setAddingTimesheet] = useState(false)
   const [trainingForm, setTrainingForm] = useState({ trainingName: '', completedDate: '', expiryDate: '', notes: '' })
   const [sicknessForm, setSicknessForm] = useState({ startDate: '', endDate: '', reason: '', notes: '' })
-  const [timesheetForm, setTimesheetForm] = useState({ date: '', timeIn: '', timeOut: '', notes: '' })
   const [workingDaysMap, setWorkingDaysMap] = useState<Record<string, string>>(
     Object.fromEntries(staff.map(s => [s.id, s.workingDays]))
   )
@@ -86,9 +403,7 @@ export default function StaffClient({ staff, sickness, training, hoursLog, times
   const staffTraining = training.filter(t => t.userId === selectedStaff)
   const staffHoursLog = hoursLog.filter(h => h.userId === selectedStaff)
   const staffTimesheets = timesheets.filter(t => t.userId === selectedStaff)
-
-  // Build a map of date -> hoursLog entry for discrepancy checking
-  const logByDate = Object.fromEntries(staffHoursLog.map(h => [h.date, h]))
+  const staffMonthlyData = monthlyData.filter(m => m.userId === selectedStaff)
 
   const expiringTraining = training.filter(t => { const d = daysUntilExpiry(t.expiryDate); return d !== null && d <= 60 && d >= 0 })
   const expiredTraining = training.filter(t => { const d = daysUntilExpiry(t.expiryDate); return d !== null && d < 0 })
@@ -109,23 +424,6 @@ export default function StaffClient({ staff, sickness, training, hoursLog, times
     setSicknessForm({ startDate: '', endDate: '', reason: '', notes: '' })
     setSaving(false)
     setAddingSickness(false)
-  }
-
-  async function handleAddTimesheet() {
-    if (!timesheetForm.date || !timesheetForm.timeIn || !timesheetForm.timeOut) return
-    const hours = calcHoursFromTimes(timesheetForm.timeIn, timesheetForm.timeOut)
-    if (!hours) return
-    setSaving(true)
-    await addTimesheetEntry(selectedStaff, {
-      date: timesheetForm.date,
-      timeIn: timesheetForm.timeIn,
-      timeOut: timesheetForm.timeOut,
-      hoursWorked: hours.toFixed(2),
-      notes: timesheetForm.notes,
-    })
-    setTimesheetForm({ date: '', timeIn: '', timeOut: '', notes: '' })
-    setSaving(false)
-    setAddingTimesheet(false)
   }
 
   async function toggleDay(userId: string, day: string) {
@@ -169,29 +467,29 @@ export default function StaffClient({ staff, sickness, training, hoursLog, times
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Weekly Rota</h3>
         <div className="overflow-x-auto -mx-4 px-4">
-        <table className="text-sm">
-          <thead>
-            <tr>
-              <th className="text-left pr-8 py-1 text-gray-500 font-medium">Name</th>
-              {ALL_DAYS.map(d => <th key={d} className="px-5 py-1 text-center text-gray-500 font-medium">{DAY_LABEL[d]}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {staff.map(s => {
-              const days = workingDaysMap[s.id]?.split(',').filter(Boolean) ?? []
-              return (
-                <tr key={s.id} className="border-t border-gray-100">
-                  <td className="pr-8 py-2 font-medium text-gray-900">{s.name}</td>
-                  {ALL_DAYS.map(d => (
-                    <td key={d} className="px-5 py-2 text-center text-base">
-                      {days.includes(d) ? <span className="text-green-600 font-bold">✓</span> : <span className="text-gray-300">—</span>}
-                    </td>
-                  ))}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+          <table className="text-sm">
+            <thead>
+              <tr>
+                <th className="text-left pr-8 py-1 text-gray-500 font-medium">Name</th>
+                {ALL_DAYS.map(d => <th key={d} className="px-5 py-1 text-center text-gray-500 font-medium">{DAY_LABEL[d]}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {staff.map(s => {
+                const days = workingDaysMap[s.id]?.split(',').filter(Boolean) ?? []
+                return (
+                  <tr key={s.id} className="border-t border-gray-100">
+                    <td className="pr-8 py-2 font-medium text-gray-900">{s.name}</td>
+                    {ALL_DAYS.map(d => (
+                      <td key={d} className="px-5 py-2 text-center text-base">
+                        {days.includes(d) ? <span className="text-green-600 font-bold">✓</span> : <span className="text-gray-300">—</span>}
+                      </td>
+                    ))}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -269,7 +567,12 @@ export default function StaffClient({ staff, sickness, training, hoursLog, times
                           <tr key={h.id}>
                             <td className="py-2 pr-6 text-gray-700">{fmtDate(h.date)}</td>
                             <td className="py-2 pr-6 text-gray-700 font-mono">{inTime ?? '—'}</td>
-                            <td className="py-2 pr-6 text-gray-700 font-mono">{outTime ?? <span className="text-amber-500">Not signed out</span>}</td>
+                            <td className="py-2 pr-6 font-mono">
+                              {outTime
+                                ? <span className="text-gray-700">{outTime}</span>
+                                : <span className="text-amber-500">Not signed out</span>
+                              }
+                            </td>
                             <td className="py-2 text-gray-700">{hrs !== null ? `${hrs.toFixed(2)}h` : '—'}</td>
                           </tr>
                         )
@@ -283,104 +586,12 @@ export default function StaffClient({ staff, sickness, training, hoursLog, times
 
           {/* ── Timesheets ── */}
           {activeTab === 'timesheet' && selectedMember && (
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm text-gray-500">
-                  Timesheet entries for <span className="font-semibold">{selectedMember.name}</span>.
-                  <span className="ml-1 text-xs text-gray-400">Flagged rows differ from the sign-in log by more than 15 min.</span>
-                </p>
-                <button onClick={() => setAddingTimesheet(a => !a)} className="text-xs text-blue-800 hover:text-blue-900 whitespace-nowrap">
-                  {addingTimesheet ? 'Cancel' : '+ Add entry'}
-                </button>
-              </div>
-
-              {addingTimesheet && (
-                <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-3 border border-gray-200">
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">Date *</label>
-                      <input type="date" value={timesheetForm.date} onChange={e => setTimesheetForm(f => ({ ...f, date: e.target.value }))} className={inp} />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">Time in *</label>
-                      <input type="time" value={timesheetForm.timeIn} onChange={e => setTimesheetForm(f => ({ ...f, timeIn: e.target.value }))} className={inp} />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">Time out *</label>
-                      <input type="time" value={timesheetForm.timeOut} onChange={e => setTimesheetForm(f => ({ ...f, timeOut: e.target.value }))} className={inp} />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">Notes</label>
-                      <input value={timesheetForm.notes} onChange={e => setTimesheetForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional" className={inp} />
-                    </div>
-                  </div>
-                  {timesheetForm.timeIn && timesheetForm.timeOut && (
-                    <p className="text-xs text-gray-500">
-                      Calculated: <span className="font-semibold">{calcHoursFromTimes(timesheetForm.timeIn, timesheetForm.timeOut)?.toFixed(2) ?? '—'}h</span>
-                    </p>
-                  )}
-                  <button
-                    onClick={handleAddTimesheet}
-                    disabled={saving || !timesheetForm.date || !timesheetForm.timeIn || !timesheetForm.timeOut}
-                    className="px-4 py-2 bg-blue-800 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50"
-                  >
-                    {saving ? 'Saving…' : 'Save entry'}
-                  </button>
-                </div>
-              )}
-
-              {staffTimesheets.length === 0 && !addingTimesheet ? (
-                <p className="text-sm text-gray-400">No timesheet entries yet.</p>
-              ) : (
-                <div className="overflow-x-auto -mx-4 px-4">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-xs text-gray-400 border-b border-gray-100">
-                        <th className="pb-2 pr-4 font-medium">Date</th>
-                        <th className="pb-2 pr-4 font-medium">In</th>
-                        <th className="pb-2 pr-4 font-medium">Out</th>
-                        <th className="pb-2 pr-4 font-medium">Hours</th>
-                        <th className="pb-2 pr-4 font-medium">Log</th>
-                        <th className="pb-2 pr-4 font-medium">Notes</th>
-                        <th className="pb-2 font-medium" />
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {staffTimesheets.slice().reverse().map(t => {
-                        const logEntry = logByDate[t.date]
-                        const diffMins = discrepancyMinutes(t, logEntry)
-                        const hasDiscrepancy = diffMins !== null && diffMins > 15
-                        const logIn = fmtUTCTime(logEntry?.signedInAt ?? null)
-                        const logOut = fmtUTCTime(logEntry?.signedOutAt ?? null)
-                        return (
-                          <tr key={t.id} className={hasDiscrepancy ? 'bg-amber-50' : ''}>
-                            <td className="py-2 pr-4 text-gray-700 whitespace-nowrap">
-                              {hasDiscrepancy && <span className="mr-1 text-amber-500" title="Timesheet differs from sign-in log by more than 15 min">⚠</span>}
-                              {fmtDate(t.date)}
-                            </td>
-                            <td className="py-2 pr-4 text-gray-700 font-mono">{t.timeIn ?? '—'}</td>
-                            <td className="py-2 pr-4 text-gray-700 font-mono">{t.timeOut ?? '—'}</td>
-                            <td className="py-2 pr-4 text-gray-700">{Number(t.hoursWorked).toFixed(2)}h</td>
-                            <td className="py-2 pr-4 text-xs text-gray-400">
-                              {logIn && logOut
-                                ? <span className="font-mono">{logIn}–{logOut}</span>
-                                : logIn
-                                  ? <span className="font-mono text-amber-500">{logIn} (no out)</span>
-                                  : <span className="italic">No log</span>
-                              }
-                            </td>
-                            <td className="py-2 pr-4 text-gray-400 text-xs">{t.notes ?? ''}</td>
-                            <td className="py-2 text-right">
-                              <button onClick={() => deleteTimesheetEntry(t.id)} className="text-xs text-red-400 hover:text-red-600">Remove</button>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+            <TimesheetPanel
+              member={selectedMember}
+              timesheets={staffTimesheets}
+              hoursLog={staffHoursLog}
+              monthlyData={staffMonthlyData}
+            />
           )}
 
           {/* ── Training ── */}

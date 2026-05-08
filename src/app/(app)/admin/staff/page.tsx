@@ -1,5 +1,5 @@
 import { db } from '@/lib/db'
-import { users, staffSickness, staffTraining, staffDailyAttendance, staffHours } from '@/lib/db/schema'
+import { users, staffSickness, staffTraining, staffDailyAttendance, staffHours, staffMonthlyTimesheets } from '@/lib/db/schema'
 import { asc } from 'drizzle-orm'
 import StaffClient from './StaffClient'
 
@@ -9,7 +9,7 @@ export default async function StaffPage() {
     .from(users)
     .orderBy(users.name)
 
-  const [sickness, training, hoursLog, timesheets] = await Promise.all([
+  const [sickness, training, hoursLog, timesheets, monthlyTimesheets] = await Promise.all([
     db.select().from(staffSickness).orderBy(staffSickness.startDate),
     db.select().from(staffTraining).orderBy(staffTraining.expiryDate),
     db.select({
@@ -20,6 +20,7 @@ export default async function StaffPage() {
       signedOutAt: staffDailyAttendance.signedOutAt,
     }).from(staffDailyAttendance).orderBy(asc(staffDailyAttendance.date)),
     db.select().from(staffHours).orderBy(asc(staffHours.date)),
+    db.select().from(staffMonthlyTimesheets).orderBy(asc(staffMonthlyTimesheets.year), asc(staffMonthlyTimesheets.month)),
   ])
 
   const serialisedHoursLog = hoursLog.map(h => ({
@@ -40,6 +41,7 @@ export default async function StaffPage() {
         training={training}
         hoursLog={serialisedHoursLog}
         timesheets={timesheets}
+        monthlyData={monthlyTimesheets}
       />
     </div>
   )
