@@ -2,6 +2,7 @@ import { db } from '@/lib/db'
 import {
   children, childSessions, emergencyContacts, medications,
   childNotes, accidentForms, registerEntries, terms, users, childSiblings, medicineAdministrations,
+  childHolidays,
 } from '@/lib/db/schema'
 import { eq, and, inArray } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
@@ -14,6 +15,7 @@ import MedicationsSection from './MedicationsSection'
 import NotesSection from './NotesSection'
 import AccidentsSection from './AccidentsSection'
 import SicknessSection from './SicknessSection'
+import HolidaySection from './HolidaySection'
 import SiblingsSection from './SiblingsSection'
 import MedicineAdminSection from './MedicineAdminSection'
 
@@ -41,6 +43,7 @@ export default async function ChildProfilePage({
     allTerms,
     siblingLinks,
     medicineAdmins,
+    holidays,
     allChildEntries,
   ] = await Promise.all([
     db.select().from(childSessions).where(eq(childSessions.childId, id)),
@@ -64,6 +67,7 @@ export default async function ChildProfilePage({
     db.select().from(terms).orderBy(terms.startDate),
     db.select({ siblingId: childSiblings.siblingId }).from(childSiblings).where(eq(childSiblings.childId, id)),
     db.select().from(medicineAdministrations).where(eq(medicineAdministrations.childId, id)).orderBy(medicineAdministrations.givenAt),
+    db.select().from(childHolidays).where(eq(childHolidays.childId, id)).orderBy(childHolidays.startDate),
     db.select({
       date: registerEntries.date,
       status: registerEntries.status,
@@ -142,6 +146,12 @@ export default async function ChildProfilePage({
         <SicknessSection
           allTerms={serialisedTerms}
           allEntries={serialisedEntries}
+          enrolledDays={enrolledDays}
+        />
+        <HolidaySection
+          childId={id}
+          childName={`${child.firstName} ${child.lastName}`}
+          holidays={holidays}
           enrolledDays={enrolledDays}
         />
         <ChildInfoSection child={child} staff={allStaff} defaultEditing={edit === '1'} />

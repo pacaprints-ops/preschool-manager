@@ -4,8 +4,9 @@ import { db } from '@/lib/db'
 import {
   children, childSessions, emergencyContacts, medications,
   childNotes, accidentForms, waitingList, childSiblings, medicineAdministrations,
+  childHolidays, registerEntries,
 } from '@/lib/db/schema'
-import { eq, or, and } from 'drizzle-orm'
+import { eq, or, and, gte, lte, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 // Note: redirect still used by archiveChild and promoteFromWaitingList
@@ -264,4 +265,112 @@ export async function addMedicineAdmin(
 export async function deleteMedicineAdmin(id: string, childId: string) {
   await db.delete(medicineAdministrations).where(eq(medicineAdministrations.id, id))
   revalidatePath(`/children/${childId}`)
+}
+
+// ─── Holiday actions ──────────────────────────────────────────────────────────
+
+const WEEK_DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+
+export async function addChildHoliday(
+  childId: string,
+  startDate: string,
+  endDate: string,
+  notes: string,
+) {
+  // Get this child's enrolled sessions (day + sessionType)
+  const sessions = await db
+    .select({ day: childSessions.day, sessionType: childSessions.sessionType })
+    .from(childSessions)
+    .where(eq(childSessions.childId, childId))
+
+  // Build map: day name -> session types
+  const daySessionMap = new Map<string, string[]>()
+  for (const s of sessions) {
+    const list = daySessionMap.get(s.day) ?? []
+    list.push(s.sessionType)
+    daySessionMap.set(s.day, list)
+  }
+
+  // Enumerate every enrolled date in the range
+  const start = new Date(startDate + 'T12:00:00')
+  const end = new Date(endDate + 'T12:00:00')
+  const enrolledDates: { date: string; sessionTypes: string[] }[] = []
+  const cur = new Date(start)
+  while (cur <= end) {
+    const dayName = WEEK_DAYS[cur.getDay()]
+    const sessionTypes = daySessionMap.get(dayName)
+    if (sessionTypes && sessionTypes.length > 0) {
+      enrolledDates.push({
+        date: cur.toISOString().slice(0, 10),
+        sessionTypes,
+      })
+    }
+    cur.setDate(cur.getDate() + 1)
+  }
+
+  const daysUsed = enrolledDates.length
+
+  // Insert holiday record
+  await db.insert(childHolidays).values({
+    childId,
+    startDate,
+    endDate,
+    notes: notes || null,
+    daysUsed,
+  })
+
+  // Create register entries for enrolled days (skip dates that already have an entry)
+  if (enrolledDates.length > 0) {
+    const allDates = enrolledDates.map(d => d.date)
+    const existing = await db
+      .select({ date: registerEntries.date, sessionType: registerEntries.sessionType })
+      .from(registerEntries)
+      .where(and(
+        eq(registerEntries.childId, childId),
+        inArray(registerEntries.date, allDates),
+      ))
+    const existingKeys = new Set(existing.map(e => `${e.date}-${e.sessionType}`))
+
+    const toInsert = enrolledDates.flatMap(({ date, sessionTypes }) =>
+      sessionTypes
+        .filter(st => !existingKeys.has(`${date}-${st}`))
+        .map(st => ({
+          childId,
+          date,
+          sessionType: st as 'morning' | 'afternoon' | 'full_day',
+          status: 'absent' as const,
+          absenceReason: 'Holiday',
+        }))
+    )
+    if (toInsert.length > 0) {
+      await db.insert(registerEntries).values(toInsert)
+    }
+  }
+
+  revalidatePath(`/children/${childId}`)
+  revalidatePath('/register')
+}
+
+export async function deleteChildHoliday(id: string, childId: string) {
+  // Fetch the holiday to get the date range
+  const [holiday] = await db
+    .select({ startDate: childHolidays.startDate, endDate: childHolidays.endDate })
+    .from(childHolidays)
+    .where(eq(childHolidays.id, id))
+    .limit(1)
+
+  if (holiday) {
+    // Remove auto-created holiday register entries in that range
+    await db.delete(registerEntries).where(and(
+      eq(registerEntries.childId, childId),
+      gte(registerEntries.date, holiday.startDate),
+      lte(registerEntries.date, holiday.endDate),
+      eq(registerEntries.status, 'absent'),
+      eq(registerEntries.absenceReason, 'Holiday'),
+    ))
+  }
+
+  await db.delete(childHolidays).where(eq(childHolidays.id, id))
+  revalidatePath(`/children/${childId}`)
+  revalidatePath('/register')
 }

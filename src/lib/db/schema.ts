@@ -334,6 +334,18 @@ export const buildingVisitors = pgTable('building_visitors', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
+// ─── Child holidays ───────────────────────────────────────────────────────────
+
+export const childHolidays = pgTable('child_holidays', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  childId: uuid('child_id').notNull().references(() => children.id),
+  startDate: date('start_date').notNull(),
+  endDate: date('end_date').notNull(),
+  notes: text('notes'),
+  daysUsed: integer('days_used').notNull().default(0),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
 // ─── Staff monthly timesheet summary ─────────────────────────────────────────
 
 export const staffMonthlyTimesheets = pgTable('staff_monthly_timesheets', {
