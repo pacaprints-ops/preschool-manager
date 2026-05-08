@@ -31,6 +31,15 @@ export const users = pgTable('users', {
   dbsCertNumber: text('dbs_cert_number'),
   dbsIssueDate: date('dbs_issue_date'),
   dbsOnUpdateService: boolean('dbs_on_update_service').notNull().default(false),
+  // Allergy / medical
+  hasAllergies: boolean('has_allergies').notNull().default(false),
+  allergies: text('allergies'),
+  medicalNotes: text('medical_notes'),
+  // Emergency contact
+  emergencyContactName: text('emergency_contact_name'),
+  emergencyContactRelationship: text('emergency_contact_relationship'),
+  emergencyContactPhone: text('emergency_contact_phone'),
+  emergencyContactPhone2: text('emergency_contact_phone2'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 

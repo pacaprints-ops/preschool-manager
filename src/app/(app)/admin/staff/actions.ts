@@ -109,3 +109,24 @@ export async function updateDBS(userId: string, data: { dbsCertNumber: string; d
   }).where(eq(users.id, userId))
   revalidatePath('/admin/staff')
 }
+
+export async function updatePersonalDetails(userId: string, data: {
+  hasAllergies: boolean
+  allergies: string
+  medicalNotes: string
+  emergencyContactName: string
+  emergencyContactRelationship: string
+  emergencyContactPhone: string
+  emergencyContactPhone2: string
+}) {
+  await db.update(users).set({
+    hasAllergies: data.hasAllergies,
+    allergies: data.allergies || null,
+    medicalNotes: data.medicalNotes || null,
+    emergencyContactName: data.emergencyContactName || null,
+    emergencyContactRelationship: data.emergencyContactRelationship || null,
+    emergencyContactPhone: data.emergencyContactPhone || null,
+    emergencyContactPhone2: data.emergencyContactPhone2 || null,
+  }).where(eq(users.id, userId))
+  revalidatePath('/admin/staff')
+}

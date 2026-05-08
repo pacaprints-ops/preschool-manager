@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import {
   addSickness, deleteSickness, addTraining, deleteTraining,
-  updateWorkingDays, updateDBS, saveMonthlyTimesheetData,
+  updateWorkingDays, updateDBS, saveMonthlyTimesheetData, updatePersonalDetails,
 } from './actions'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -12,6 +12,9 @@ type StaffMember = {
   id: string; name: string; email: string; role: string
   workingDays: string; dbsCertNumber: string | null
   dbsIssueDate: string | null; dbsOnUpdateService: boolean
+  hasAllergies: boolean; allergies: string | null; medicalNotes: string | null
+  emergencyContactName: string | null; emergencyContactRelationship: string | null
+  emergencyContactPhone: string | null; emergencyContactPhone2: string | null
 }
 type Sickness = { id: string; userId: string; startDate: string; endDate: string | null; reason: string | null; notes: string | null }
 type Training = { id: string; userId: string; trainingName: string; completedDate: string; expiryDate: string | null; notes: string | null }
@@ -548,7 +551,7 @@ export default function StaffClient({ staff, sickness, training, hoursLog, times
   monthlyData: MonthlyTimesheet[]
 }) {
   const [selectedStaff, setSelectedStaff] = useState<string>(staff[0]?.id ?? '')
-  const [activeTab, setActiveTab] = useState<'rota' | 'training' | 'sickness' | 'dbs' | 'hours' | 'timesheet'>('rota')
+  const [activeTab, setActiveTab] = useState<'rota' | 'training' | 'sickness' | 'dbs' | 'hours' | 'timesheet' | 'personal'>('rota')
   const [saving, setSaving] = useState(false)
   const [dbsForm, setDbsForm] = useState<Record<string, { dbsCertNumber: string; dbsIssueDate: string; dbsOnUpdateService: boolean }>>(
     Object.fromEntries(staff.map(s => [s.id, {
@@ -565,6 +568,22 @@ export default function StaffClient({ staff, sickness, training, hoursLog, times
   const [workingDaysMap, setWorkingDaysMap] = useState<Record<string, string>>(
     Object.fromEntries(staff.map(s => [s.id, s.workingDays]))
   )
+  const [personalForm, setPersonalForm] = useState<Record<string, {
+    hasAllergies: boolean; allergies: string; medicalNotes: string
+    emergencyContactName: string; emergencyContactRelationship: string
+    emergencyContactPhone: string; emergencyContactPhone2: string
+  }>>(
+    Object.fromEntries(staff.map(s => [s.id, {
+      hasAllergies: s.hasAllergies,
+      allergies: s.allergies ?? '',
+      medicalNotes: s.medicalNotes ?? '',
+      emergencyContactName: s.emergencyContactName ?? '',
+      emergencyContactRelationship: s.emergencyContactRelationship ?? '',
+      emergencyContactPhone: s.emergencyContactPhone ?? '',
+      emergencyContactPhone2: s.emergencyContactPhone2 ?? '',
+    }]))
+  )
+  const [savingPersonal, setSavingPersonal] = useState(false)
 
   const selectedMember = staff.find(s => s.id === selectedStaff)
   const staffSickness = sickness.filter(s => s.userId === selectedStaff)
@@ -606,6 +625,7 @@ export default function StaffClient({ staff, sickness, training, hoursLog, times
 
   const tabs: { key: typeof activeTab; label: string }[] = [
     { key: 'rota', label: 'Rota' },
+    { key: 'personal', label: 'Personal' },
     { key: 'hours', label: 'Hours log' },
     { key: 'timesheet', label: 'Timesheets' },
     { key: 'training', label: 'Training' },
@@ -706,6 +726,142 @@ export default function StaffClient({ staff, sickness, training, hoursLog, times
               <p className="text-xs text-gray-400">Changes save automatically.</p>
             </div>
           )}
+
+          {/* ── Personal ── */}
+          {activeTab === 'personal' && selectedMember && (() => {
+            const pf = personalForm[selectedStaff] ?? {
+              hasAllergies: false, allergies: '', medicalNotes: '',
+              emergencyContactName: '', emergencyContactRelationship: '',
+              emergencyContactPhone: '', emergencyContactPhone2: '',
+            }
+            const set = (patch: Partial<typeof pf>) =>
+              setPersonalForm(f => ({ ...f, [selectedStaff]: { ...pf, ...patch } }))
+            return (
+              <div className="space-y-5">
+                {/* Allergy / medical */}
+                <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+                  <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Allergy &amp; Medical</h4>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="hasAllergies"
+                      checked={pf.hasAllergies}
+                      onChange={e => set({ hasAllergies: e.target.checked })}
+                      className="rounded"
+                    />
+                    <label htmlFor="hasAllergies" className="text-sm text-gray-700 font-medium">Has allergies</label>
+                  </div>
+                  {pf.hasAllergies && (
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Allergy details</label>
+                      <textarea
+                        value={pf.allergies}
+                        onChange={e => set({ allergies: e.target.value })}
+                        rows={2}
+                        className={inp + ' resize-none'}
+                        placeholder="e.g. Peanut allergy — carries EpiPen"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Medical notes</label>
+                    <textarea
+                      value={pf.medicalNotes}
+                      onChange={e => set({ medicalNotes: e.target.value })}
+                      rows={2}
+                      className={inp + ' resize-none'}
+                      placeholder="Any medical conditions, medication, etc."
+                    />
+                  </div>
+                </div>
+
+                {/* Emergency contact */}
+                <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+                  <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Emergency Contact</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Name</label>
+                      <input
+                        value={pf.emergencyContactName}
+                        onChange={e => set({ emergencyContactName: e.target.value })}
+                        placeholder="Full name"
+                        className={inp}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Relationship</label>
+                      <input
+                        value={pf.emergencyContactRelationship}
+                        onChange={e => set({ emergencyContactRelationship: e.target.value })}
+                        placeholder="e.g. Spouse, Parent"
+                        className={inp}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Phone (primary)</label>
+                      <input
+                        type="tel"
+                        value={pf.emergencyContactPhone}
+                        onChange={e => set({ emergencyContactPhone: e.target.value })}
+                        placeholder="07xxx xxxxxx"
+                        className={inp}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Phone (secondary)</label>
+                      <input
+                        type="tel"
+                        value={pf.emergencyContactPhone2}
+                        onChange={e => set({ emergencyContactPhone2: e.target.value })}
+                        placeholder="Optional"
+                        className={inp}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={async () => {
+                    setSavingPersonal(true)
+                    await updatePersonalDetails(selectedStaff, pf)
+                    setSavingPersonal(false)
+                  }}
+                  disabled={savingPersonal}
+                  className="px-4 py-2 bg-blue-800 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50 transition-colors"
+                >
+                  {savingPersonal ? 'Saving…' : 'Save'}
+                </button>
+
+                {/* Summary display if data already saved */}
+                {(selectedMember.hasAllergies || selectedMember.emergencyContactName) && (
+                  <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-2 border border-gray-100">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Saved record</p>
+                    {selectedMember.hasAllergies && (
+                      <div className="flex items-start gap-2">
+                        <span className="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap">Allergy</span>
+                        <span className="text-gray-700">{selectedMember.allergies ?? 'Details not recorded'}</span>
+                      </div>
+                    )}
+                    {selectedMember.medicalNotes && (
+                      <div className="text-gray-600">{selectedMember.medicalNotes}</div>
+                    )}
+                    {selectedMember.emergencyContactName && (
+                      <div className="pt-1 border-t border-gray-100">
+                        <span className="font-medium text-gray-800">{selectedMember.emergencyContactName}</span>
+                        {selectedMember.emergencyContactRelationship && <span className="text-gray-500 ml-1">({selectedMember.emergencyContactRelationship})</span>}
+                        <div className="text-gray-600 mt-0.5">
+                          {selectedMember.emergencyContactPhone}
+                          {selectedMember.emergencyContactPhone2 && <span className="ml-3 text-gray-400">{selectedMember.emergencyContactPhone2}</span>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {/* ── Hours log ── */}
           {activeTab === 'hours' && selectedMember && (

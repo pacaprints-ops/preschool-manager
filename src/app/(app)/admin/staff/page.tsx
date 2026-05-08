@@ -5,7 +5,16 @@ import StaffClient from './StaffClient'
 
 export default async function StaffPage() {
   const allStaff = await db
-    .select({ id: users.id, name: users.name, email: users.email, role: users.role, workingDays: users.workingDays, dbsCertNumber: users.dbsCertNumber, dbsIssueDate: users.dbsIssueDate, dbsOnUpdateService: users.dbsOnUpdateService })
+    .select({
+      id: users.id, name: users.name, email: users.email, role: users.role,
+      workingDays: users.workingDays,
+      dbsCertNumber: users.dbsCertNumber, dbsIssueDate: users.dbsIssueDate, dbsOnUpdateService: users.dbsOnUpdateService,
+      hasAllergies: users.hasAllergies, allergies: users.allergies, medicalNotes: users.medicalNotes,
+      emergencyContactName: users.emergencyContactName,
+      emergencyContactRelationship: users.emergencyContactRelationship,
+      emergencyContactPhone: users.emergencyContactPhone,
+      emergencyContactPhone2: users.emergencyContactPhone2,
+    })
     .from(users)
     .orderBy(users.name)
 
