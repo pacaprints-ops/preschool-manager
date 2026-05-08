@@ -694,23 +694,15 @@ export default function AccidentsSection({
               </div>
 
               {/* Head injury */}
-              <div className="border border-gray-200 rounded-lg p-3 space-y-2">
+              <div className="border border-gray-200 rounded-lg p-3 flex flex-wrap gap-x-6 gap-y-2">
                 <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                   <input type="checkbox" checked={fd.isHeadInjury} onChange={e => set('isHeadInjury', e.target.checked)} className="rounded" />
                   This is a head injury
                 </label>
-                {fd.isHeadInjury && (
-                  <div className="pl-5 space-y-2">
-                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                      <input type="checkbox" checked={fd.headInjuryAdviceGiven} onChange={e => set('headInjuryAdviceGiven', e.target.checked)} className="rounded" />
-                      Advice given to parent / carer
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                      <input type="checkbox" checked={fd.headInjuryMonitoringFollowed} onChange={e => set('headInjuryMonitoringFollowed', e.target.checked)} className="rounded" />
-                      Head injury monitoring followed
-                    </label>
-                  </div>
-                )}
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input type="checkbox" checked={fd.headInjuryMonitoringFollowed} onChange={e => set('headInjuryMonitoringFollowed', e.target.checked)} className="rounded" />
+                  Head injury monitoring followed
+                </label>
               </div>
 
               {/* Staff — reporter + first aider */}
@@ -760,6 +752,16 @@ export default function AccidentsSection({
               {/* Parent / carer */}
               <div className="border border-gray-200 rounded-lg p-3 space-y-3">
                 <p className="text-xs font-semibold text-gray-600">Parent / carer</p>
+                <div className="flex flex-wrap gap-x-6 gap-y-2">
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input type="checkbox" checked={fd.parentNotified} onChange={e => set('parentNotified', e.target.checked)} className="rounded" />
+                    Parent / carer informed
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input type="checkbox" checked={fd.headInjuryAdviceGiven} onChange={e => set('headInjuryAdviceGiven', e.target.checked)} className="rounded" />
+                    Advice given to parent / carer
+                  </label>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={label}>Parent / carer name</label>
