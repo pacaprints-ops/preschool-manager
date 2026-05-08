@@ -166,6 +166,9 @@ export async function addAccidentForm(childId: string, reportedById: string, dat
   headInjuryMonitoringFollowed: boolean
   firstAidPersonId?: string
   firstAidAdministered?: string
+  reporterJobRole?: string
+  reporterSignature?: string
+  firstAiderSignature?: string
   bodyLocation?: string
   parentNotified: boolean
   parentNotifiedAt?: string
@@ -189,6 +192,9 @@ export async function addAccidentForm(childId: string, reportedById: string, dat
     headInjuryMonitoringFollowed: data.headInjuryMonitoringFollowed,
     firstAidPersonId: data.firstAidPersonId ?? null,
     firstAidAdministered: data.firstAidAdministered ?? null,
+    reporterJobRole: data.reporterJobRole ?? null,
+    reporterSignature: data.reporterSignature ?? null,
+    firstAiderSignature: data.firstAiderSignature ?? null,
     bodyLocation: data.bodyLocation ?? null,
     parentNotified: data.parentNotified,
     parentNotifiedAt: data.parentNotifiedAt ? new Date(data.parentNotifiedAt) : null,

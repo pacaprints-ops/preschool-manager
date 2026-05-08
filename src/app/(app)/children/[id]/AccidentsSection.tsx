@@ -18,6 +18,9 @@ type Accident = {
     headInjuryMonitoringFollowed: boolean
     firstAidPersonId: string | null
     firstAidAdministered: string | null
+    reporterJobRole: string | null
+    reporterSignature: string | null
+    firstAiderSignature: string | null
     bodyLocation: string | null
     parentNotified: boolean
     parentNotifiedAt: Date | null
@@ -369,14 +372,20 @@ function blank(userId: string) {
     headInjuryAdviceGiven: false,
     headInjuryMonitoringFollowed: false,
     reportedById: userId,
+    reporterJobRole: '',
+    reporterSignature: '',
     firstAidSamePerson: true,
     firstAidPersonId: '',
     firstAidAdministered: '',
+    firstAiderSignature: '',
     bodyLocation: null as { x: number; y: number } | null,
     parentNotified: false,
     parentNotifiedAt: '',
     parentCarerName: '',
     parentSignature: '',
+    previousConcerns: [] as string[],
+    previousConcernsOther: '',
+    dslInformedAt: '',
   }
 }
 
@@ -423,11 +432,17 @@ export default function AccidentsSection({
       headInjuryMonitoringFollowed: fd.headInjuryMonitoringFollowed,
       firstAidPersonId: fd.firstAidSamePerson ? (fd.reportedById || userId) : (fd.firstAidPersonId || undefined),
       firstAidAdministered: fd.firstAidAdministered || undefined,
+      reporterJobRole: fd.reporterJobRole || undefined,
+      reporterSignature: fd.reporterSignature || undefined,
+      firstAiderSignature: fd.firstAidSamePerson ? (fd.reporterSignature || undefined) : (fd.firstAiderSignature || undefined),
       bodyLocation: fd.bodyLocation ? JSON.stringify(fd.bodyLocation) : undefined,
       parentNotified: fd.parentNotified,
       parentNotifiedAt: fd.parentNotifiedAt || undefined,
       parentCarerName: fd.parentCarerName || undefined,
       parentSignature: fd.parentSignature || undefined,
+      previousConcerns: fd.previousConcerns.length > 0 ? JSON.stringify(fd.previousConcerns) : undefined,
+      previousConcernsOther: fd.previousConcernsOther || undefined,
+      dslInformedAt: fd.dslInformedAt || undefined,
     })
     setSaving(false)
     reset()
@@ -701,11 +716,21 @@ export default function AccidentsSection({
               {/* Staff — reporter + first aider */}
               <div className="border border-gray-200 rounded-lg p-3 space-y-3">
                 <p className="text-xs font-semibold text-gray-600">Staff details</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={label}>Reported by</label>
+                    <select value={fd.reportedById} onChange={e => set('reportedById', e.target.value)} className={inp}>
+                      {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={label}>Job role</label>
+                    <input value={fd.reporterJobRole} onChange={e => set('reporterJobRole', e.target.value)} placeholder="e.g. Practitioner" className={inp} />
+                  </div>
+                </div>
                 <div>
-                  <label className={label}>Reported by</label>
-                  <select value={fd.reportedById} onChange={e => set('reportedById', e.target.value)} className={inp}>
-                    {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
+                  <label className={label}>Reporter signature <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <SignaturePad onChange={sig => set('reporterSignature', sig)} />
                 </div>
                 <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                   <input type="checkbox" checked={fd.firstAidSamePerson} onChange={e => set('firstAidSamePerson', e.target.checked)} className="rounded" />
@@ -724,6 +749,12 @@ export default function AccidentsSection({
                   <label className={label}>First aid administered</label>
                   <input value={fd.firstAidAdministered} onChange={e => set('firstAidAdministered', e.target.value)} placeholder="e.g. Plaster, ice pack, wound cleaned…" className={inp} />
                 </div>
+                {!fd.firstAidSamePerson && (
+                  <div>
+                    <label className={label}>First aider signature <span className="text-gray-400 font-normal">(optional)</span></label>
+                    <SignaturePad onChange={sig => set('firstAiderSignature', sig)} />
+                  </div>
+                )}
               </div>
 
               {/* Parent / carer */}
@@ -745,6 +776,31 @@ export default function AccidentsSection({
                     <span className="text-gray-400 font-normal">(optional — can be added later)</span>
                   </label>
                   <SignaturePad onChange={sig => set('parentSignature', sig)} />
+                </div>
+              </div>
+
+              {/* DSL */}
+              <div className="border border-gray-200 rounded-lg p-3 space-y-3">
+                <p className="text-xs font-semibold text-gray-600">DSL — Previous Incident Concerns <span className="text-gray-400 font-normal">(DSL to complete — optional)</span></p>
+                <div className="flex flex-wrap gap-x-4 gap-y-2">
+                  {CONCERNS.map(c => (
+                    <label key={c} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={fd.previousConcerns.includes(c)}
+                        onChange={e => set('previousConcerns', e.target.checked ? [...fd.previousConcerns, c] : fd.previousConcerns.filter(x => x !== c))}
+                        className="rounded"
+                      />
+                      {c.charAt(0).toUpperCase() + c.slice(1)}
+                    </label>
+                  ))}
+                </div>
+                {fd.previousConcerns.includes('other') && (
+                  <input value={fd.previousConcernsOther} onChange={e => set('previousConcernsOther', e.target.value)} placeholder="Describe other concern…" className={inp} />
+                )}
+                <div>
+                  <label className={label}>Date & time information shared with DSL</label>
+                  <input type="datetime-local" value={fd.dslInformedAt} onChange={e => set('dslInformedAt', e.target.value)} className={inp} />
                 </div>
               </div>
 

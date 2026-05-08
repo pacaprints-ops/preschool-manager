@@ -161,6 +161,11 @@ export const accidentForms = pgTable('accident_forms', {
   // First aid
   firstAidPersonId: uuid('first_aid_person_id').references(() => users.id),
   firstAidAdministered: text('first_aid_administered'),
+  // Reporter
+  reporterJobRole: text('reporter_job_role'),
+  reporterSignature: text('reporter_signature'),
+  // First aider
+  firstAiderSignature: text('first_aider_signature'),
   // Body injury location — JSON string: {x: number, y: number} in SVG viewBox coords
   bodyLocation: text('body_location'),
   // Parent / carer

@@ -15,6 +15,9 @@ type FormData = {
   headInjuryMonitoringFollowed: boolean
   firstAidPersonId: string | null
   firstAidAdministered: string | null
+  reporterJobRole: string | null
+  reporterSignature: string | null
+  firstAiderSignature: string | null
   bodyLocation: string | null
   parentNotified: boolean
   parentNotifiedAt: Date | null
@@ -316,12 +319,17 @@ export default function AccidentPrintView({
           <SectionHeader>Details of Person(s) Reporting or Observing the Incident</SectionHeader>
           <div style={{ display: 'flex' }}>
             <Row label="Full name:" value={reporterName ?? ''} half />
-            <Row label="Job role:" value="" half />
+            <Row label="Job role:" value={form.reporterJobRole ?? ''} half />
           </div>
           <div style={{ display: 'flex', borderBottom: border }}>
             <div style={{ flex: 1, borderRight: border }}>
               <div style={{ padding: '4px 8px', borderBottom: border, fontWeight: 600, fontSize: 10, backgroundColor: '#f9f9f9' }}>Signature:</div>
-              <div style={{ minHeight: 44 }} />
+              <div style={{ minHeight: 50, padding: '4px 8px' }}>
+                {form.reporterSignature
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={form.reporterSignature} alt="Reporter signature" style={{ maxHeight: 44 }} />
+                  : null}
+              </div>
             </div>
             <div style={{ flex: 1 }}>
               <Row label="Date & time of recording:" value={`${fmtDate(form.incidentDate)} ${fmtTime(form.incidentDate)}`} />
@@ -330,8 +338,13 @@ export default function AccidentPrintView({
           <Row label="Name of person completing First Aid:" value={isSamePerson ? (reporterName ?? '') : (firstAider?.name ?? '')} />
           <Row label="First aid administered:" value={form.firstAidAdministered ?? ''} />
           <div style={{ borderBottom: border }}>
-            <div style={{ padding: '4px 8px', borderBottom: border, fontWeight: 600, fontSize: 10, backgroundColor: '#f9f9f9' }}>Signature:</div>
-            <div style={{ minHeight: 44 }} />
+            <div style={{ padding: '4px 8px', borderBottom: border, fontWeight: 600, fontSize: 10, backgroundColor: '#f9f9f9' }}>First aider signature:</div>
+            <div style={{ minHeight: 50, padding: '4px 8px' }}>
+              {(isSamePerson ? form.reporterSignature : form.firstAiderSignature)
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={(isSamePerson ? form.reporterSignature : form.firstAiderSignature)!} alt="First aider signature" style={{ maxHeight: 44 }} />
+                : null}
+            </div>
           </div>
           <div style={{ padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
             <Tick checked={isSamePerson} />
