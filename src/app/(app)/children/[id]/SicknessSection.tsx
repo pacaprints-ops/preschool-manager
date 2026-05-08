@@ -42,7 +42,7 @@ function circleStyle(
   if (dStr > todayStr) return { bg: 'bg-gray-100', text: 'text-gray-300', tooltip: '' }
   if (!entry) return { bg: 'bg-gray-100', text: 'text-gray-400', tooltip: 'Not recorded' }
   if (entry.status === 'present') {
-    if (isLatePickup(entry)) return { bg: 'bg-blue-500', text: 'text-white', tooltip: 'Late pickup' }
+    if (isLatePickup(entry)) return { bg: 'bg-sky-400', text: 'text-white', tooltip: 'Late pickup' }
     return { bg: 'bg-green-500', text: 'text-white', tooltip: 'Present' }
   }
   if (entry.status === 'absent') {
@@ -100,7 +100,7 @@ function AttendanceCalendar({ term, entries, enrolledDays }: {
           { bg: 'bg-green-500', label: 'Present' },
           { bg: 'bg-red-500', label: 'Absent' },
           { bg: 'bg-amber-400', label: 'Holiday' },
-          { bg: 'bg-blue-500', label: 'Late pickup' },
+          { bg: 'bg-sky-400', label: 'Late pickup' },
           { bg: 'bg-gray-100 border border-gray-200', label: 'Not recorded' },
         ].map(({ bg, label }) => (
           <div key={label} className="flex items-center gap-1.5 text-xs text-gray-500">
@@ -283,7 +283,7 @@ export default function SicknessSection({ allTerms, allEntries, enrolledDays }: 
         )}
         {stats.late > 0 && (
           <span className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-400 inline-block" />
             {stats.late} late pickup
           </span>
         )}
