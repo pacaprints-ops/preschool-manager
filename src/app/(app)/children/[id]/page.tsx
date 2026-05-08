@@ -3,7 +3,7 @@ import {
   children, childSessions, emergencyContacts, medications,
   childNotes, accidentForms, registerEntries, terms, users, childSiblings, medicineAdministrations,
 } from '@/lib/db/schema'
-import { eq, and, gte, lte, sql, inArray } from 'drizzle-orm'
+import { eq, and, inArray } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import Link from 'next/link'
@@ -41,6 +41,7 @@ export default async function ChildProfilePage({
     allTerms,
     siblingLinks,
     medicineAdmins,
+    allChildEntries,
   ] = await Promise.all([
     db.select().from(childSessions).where(eq(childSessions.childId, id)),
     db.select().from(emergencyContacts).where(eq(emergencyContacts.childId, id)),
@@ -63,6 +64,12 @@ export default async function ChildProfilePage({
     db.select().from(terms).orderBy(terms.startDate),
     db.select({ siblingId: childSiblings.siblingId }).from(childSiblings).where(eq(childSiblings.childId, id)),
     db.select().from(medicineAdministrations).where(eq(medicineAdministrations.childId, id)).orderBy(medicineAdministrations.givenAt),
+    db.select({
+      date: registerEntries.date,
+      status: registerEntries.status,
+      absenceReason: registerEntries.absenceReason,
+      signedOutAt: registerEntries.signedOutAt,
+    }).from(registerEntries).where(eq(registerEntries.childId, id)).orderBy(registerEntries.date),
   ])
 
   // Fetch sibling details
@@ -78,55 +85,22 @@ export default async function ChildProfilePage({
     .from(children)
     .where(eq(children.archived, false))
 
-  // Sickness stats
-  const today = new Date()
-  const currentTerm = allTerms.find(t =>
-    new Date(t.startDate) <= today && new Date(t.endDate) >= today
-  )
+  const enrolledDays = childSessionsData.map(s => s.day)
 
-  let termAbsences = 0
-  let termTotal = 0
-  let yearAbsences = 0
-  let yearTotal = 0
-
-  if (currentTerm) {
-    const termEntries = await db.select().from(registerEntries).where(
-      and(
-        eq(registerEntries.childId, id),
-        gte(registerEntries.date, currentTerm.startDate),
-        lte(registerEntries.date, currentTerm.endDate)
-      )
-    )
-    termAbsences = termEntries.filter(e => e.status === 'absent').length
-    termTotal = termEntries.length
-
-    const yearEntries = await db.select().from(registerEntries).where(
-      and(
-        eq(registerEntries.childId, id),
-        gte(registerEntries.date, currentTerm.academicYear.split('-')[0] + '-09-01')
-      )
-    )
-    yearAbsences = yearEntries.filter(e => e.status === 'absent').length
-    yearTotal = yearEntries.length
-  }
-
-  const termSicknessPercent = termTotal > 0 ? Math.round((termAbsences / termTotal) * 100) : null
-  const yearSicknessPercent = yearTotal > 0 ? Math.round((yearAbsences / yearTotal) * 100) : null
-
-  const calendarEntries = currentTerm ? (await db.select().from(registerEntries).where(
-    and(
-      eq(registerEntries.childId, id),
-      gte(registerEntries.date, currentTerm.startDate),
-      lte(registerEntries.date, currentTerm.endDate)
-    )
-  )).map(e => ({
+  const serialisedEntries = allChildEntries.map(e => ({
     date: e.date,
     status: e.status,
     absenceReason: e.absenceReason,
     signedOutAt: e.signedOutAt ? e.signedOutAt.toISOString() : null,
-  })) : []
+  }))
 
-  const enrolledDays = childSessionsData.map(s => s.day)
+  const serialisedTerms = allTerms.map(t => ({
+    id: t.id,
+    name: t.name,
+    startDate: t.startDate,
+    endDate: t.endDate,
+    academicYear: t.academicYear,
+  }))
 
   return (
     <div className="max-w-3xl">
@@ -166,15 +140,8 @@ export default async function ChildProfilePage({
 
       <div className="space-y-4">
         <SicknessSection
-          termPercent={termSicknessPercent}
-          yearPercent={yearSicknessPercent}
-          termName={currentTerm?.name}
-          termAbsences={termAbsences}
-          termTotal={termTotal}
-          yearAbsences={yearAbsences}
-          yearTotal={yearTotal}
-          term={currentTerm ? { name: currentTerm.name, startDate: currentTerm.startDate, endDate: currentTerm.endDate } : null}
-          termEntries={calendarEntries}
+          allTerms={serialisedTerms}
+          allEntries={serialisedEntries}
           enrolledDays={enrolledDays}
         />
         <ChildInfoSection child={child} staff={allStaff} defaultEditing={edit === '1'} />
