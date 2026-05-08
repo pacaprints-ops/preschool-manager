@@ -21,8 +21,20 @@ export async function deleteSickness(id: string) {
   revalidatePath('/admin/staff')
 }
 
-export async function addHours(userId: string, data: { date: string; hoursWorked: string; notes?: string }) {
-  await db.insert(staffHours).values({ userId, date: data.date, hoursWorked: data.hoursWorked, notes: data.notes || null })
+export async function addTimesheetEntry(userId: string, data: { date: string; timeIn: string; timeOut: string; hoursWorked: string; notes?: string }) {
+  await db.insert(staffHours).values({
+    userId,
+    date: data.date,
+    timeIn: data.timeIn || null,
+    timeOut: data.timeOut || null,
+    hoursWorked: data.hoursWorked,
+    notes: data.notes || null,
+  })
+  revalidatePath('/admin/staff')
+}
+
+export async function deleteTimesheetEntry(id: string) {
+  await db.delete(staffHours).where(eq(staffHours.id, id))
   revalidatePath('/admin/staff')
 }
 

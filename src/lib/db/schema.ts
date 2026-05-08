@@ -244,6 +244,8 @@ export const staffHours = pgTable('staff_hours', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id),
   date: date('date').notNull(),
+  timeIn: text('time_in'),   // HH:MM local
+  timeOut: text('time_out'), // HH:MM local
   hoursWorked: numeric('hours_worked', { precision: 4, scale: 2 }).notNull(),
   notes: text('notes'),
 })

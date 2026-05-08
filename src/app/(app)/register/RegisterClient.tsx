@@ -97,7 +97,7 @@ function calcStaff(subset: RegisterRow[]): { staff: number; count2yr: number; co
 function fmtTime(iso: string | null): string | null {
   if (!iso) return null
   const d = new Date(iso)
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`
 }
 
 function localTimeNow(): string {
@@ -714,7 +714,7 @@ export default function RegisterClient({
   function formatSignOutTime(isoOrLocal: string) {
     if (isoOrLocal.length <= 5) return isoOrLocal
     const d = new Date(isoOrLocal)
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`
   }
 
   function minutesLateFromTime(timeStr: string): number {
