@@ -34,3 +34,16 @@ body {
   body { background: white; }
   .print\:block { display: block !important; }
 }
+
+@media print {
+  body.printing-accident > * { display: none !important; }
+  body.printing-accident .accident-print-root {
+    display: block !important;
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: white;
+    overflow: visible;
+  }
+  .no-print { display: none !important; }
+}

@@ -165,7 +165,13 @@ export default async function ChildProfilePage({
           staff={allStaff}
         />
         <NotesSection childId={id} notes={notes} userId={session?.user?.id ?? ''} />
-        <AccidentsSection childId={id} accidents={accidents} userId={session?.user?.id ?? ''} staff={allStaff} />
+        <AccidentsSection
+          childId={id}
+          accidents={accidents}
+          userId={session?.user?.id ?? ''}
+          staff={allStaff}
+          child={{ firstName: child.firstName, lastName: child.lastName, dateOfBirth: child.dateOfBirth, address: child.address ?? null }}
+        />
 
         {!child.archived ? (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center justify-between">

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { addAccidentForm, signAccidentForm, updateAccidentDsl } from '../actions'
+import AccidentPrintView from './AccidentPrintView'
 
 type Accident = {
   form: {
@@ -31,6 +32,13 @@ type Accident = {
 }
 
 type Staff = { id: string; name: string }
+
+type Child = {
+  firstName: string
+  lastName: string
+  dateOfBirth: string
+  address: string | null
+}
 
 const inp = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700'
 const label = 'block text-xs text-gray-500 mb-1'
@@ -377,17 +385,20 @@ export default function AccidentsSection({
   accidents,
   userId,
   staff,
+  child,
 }: {
   childId: string
   accidents: Accident[]
   userId: string
   staff: Staff[]
+  child: Child
 }) {
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [signingId, setSigningId] = useState<string | null>(null)
   const [dslId, setDslId] = useState<string | null>(null)
+  const [printForm, setPrintForm] = useState<Accident | null>(null)
 
   const [fd, setFd] = useState(() => blank(userId))
 
@@ -576,12 +587,34 @@ export default function AccidentsSection({
                       <DslPanel formId={a.id} childId={childId} form={a} onDone={() => setDslId(null)} />
                     )}
                   </div>
+
+                  {/* Print button */}
+                  <div className="border-t border-gray-100 pt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setPrintForm({ form: a, reporterName })}
+                      className="text-xs text-gray-500 hover:text-gray-800 flex items-center gap-1"
+                    >
+                      🖨 View / Print form
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
           )
         })}
       </div>
+
+      {/* ── Print view ── */}
+      {printForm && (
+        <AccidentPrintView
+          form={printForm.form}
+          child={child}
+          reporterName={printForm.reporterName}
+          staff={staff}
+          onClose={() => setPrintForm(null)}
+        />
+      )}
 
       {/* ── New accident modal ── */}
       {modalOpen && (
