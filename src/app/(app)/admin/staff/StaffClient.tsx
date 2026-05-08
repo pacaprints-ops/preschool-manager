@@ -87,6 +87,123 @@ function getWeeksInMonth(year: number, month: number): Date[][] {
   return weeks
 }
 
+function daySuffix(d: number): string {
+  if (d > 3 && d < 21) return 'th'
+  switch (d % 10) { case 1: return 'st'; case 2: return 'nd'; case 3: return 'rd'; default: return 'th' }
+}
+
+function generateTimesheetHTML(
+  member: StaffMember,
+  year: number,
+  month: number,
+  timesheets: TimesheetEntry[],
+  monthlyData: MonthlyTimesheet | undefined,
+): string {
+  const monthStr = `${year}-${String(month).padStart(2, '0')}`
+  const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+  const weeks = getWeeksInMonth(year, month)
+  const hoursMap: Record<string, number> = {}
+  for (const t of timesheets) {
+    if (t.date.startsWith(monthStr)) hoursMap[t.date] = parseFloat(t.hoursWorked) || 0
+  }
+
+  const weekTotals = weeks.map(week =>
+    week.reduce((sum, day) => {
+      if (day.getMonth() !== month - 1 || day.getFullYear() !== year) return sum
+      return sum + (hoursMap[dateStr(day)] ?? 0)
+    }, 0)
+  )
+  const regularTotal = weekTotals.reduce((a, b) => a + b, 0)
+  const addHrs = parseFloat(monthlyData?.additionalHours ?? '0') || 0
+  const extraHrs = parseFloat(monthlyData?.totalExtraHours ?? '0') || 0
+  const totalMonthly = regularTotal + addHrs + extraHrs
+
+  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+
+  const rowsHTML = weeks.map((week, wi) => {
+    const cells = week.map((day, di) => {
+      const inMonth = day.getMonth() === month - 1 && day.getFullYear() === year
+      if (!inMonth) {
+        return `<td style="border:1px solid #bbb;padding:6px;min-width:80px;height:60px;background:#f5f5f5;"></td>`
+      }
+      const ds = dateStr(day)
+      const hrs = hoursMap[ds] ?? 0
+      return `
+        <td style="border:1px solid #bbb;padding:6px 8px;vertical-align:top;min-width:80px;height:60px;text-align:center;">
+          <div style="font-size:11px;color:#555;margin-bottom:4px;">${dayNames[di].slice(0, 3)} ${day.getDate()}<sup style="font-size:9px;">${daySuffix(day.getDate())}</sup></div>
+          <div style="font-size:14px;font-weight:600;">${hrs > 0 ? hrs.toFixed(2) : ''}</div>
+        </td>`
+    }).join('')
+    const wt = weekTotals[wi]
+    return `<tr>${cells}
+        <td style="border:1px solid #bbb;padding:6px 8px;text-align:center;font-weight:700;background:#f5f5f5;vertical-align:middle;">
+          ${wt > 0 ? wt.toFixed(2) : ''}
+        </td>
+      </tr>`
+  }).join('')
+
+  const summaryRows = [
+    ['Total Hours', regularTotal.toFixed(2)],
+    ['Additional Hours' + (monthlyData?.additionalHoursNotes ? ` (${monthlyData.additionalHoursNotes})` : ''), addHrs > 0 ? addHrs.toFixed(2) : ''],
+    ['Total Monthly Hours', `<strong>${totalMonthly.toFixed(2)}</strong>`],
+    ['Total Key Children', monthlyData?.totalKeyChildren != null ? String(monthlyData.totalKeyChildren) : ''],
+    ['Total Extra Hours', extraHrs > 0 ? extraHrs.toFixed(2) : ''],
+  ].map(([label, val]) => `
+    <tr>
+      <td style="border:1px solid #bbb;padding:7px 10px;font-weight:600;width:220px;">${label}</td>
+      <td style="border:1px solid #bbb;padding:7px 10px;width:120px;text-align:right;">${val}</td>
+      <td style="border:1px solid #bbb;padding:7px 10px;" colspan="2"></td>
+    </tr>`).join('')
+
+  const payRow = `
+    <tr>
+      <td style="border:2px solid #333;padding:9px 10px;font-weight:800;font-size:14px;">TOTAL PAY</td>
+      <td style="border:2px solid #333;padding:9px 10px;font-weight:800;font-size:14px;text-align:right;">${monthlyData?.totalPay ? `£${parseFloat(monthlyData.totalPay).toFixed(2)}` : ''}</td>
+      <td style="border:2px solid #333;padding:9px 10px;" colspan="2"></td>
+    </tr>`
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Wages Sheet – ${member.name} – ${monthLabel}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; font-size: 13px; margin: 24px; color: #000; }
+    h1 { text-align: center; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 14px; }
+    .header { display: flex; gap: 48px; margin-bottom: 18px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+    th { border: 1px solid #bbb; padding: 8px; text-align: center; font-weight: 700; background: #ececec; font-size: 12px; }
+    #print-btn { float: right; padding: 8px 18px; background: #1e3a8a; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: Arial, sans-serif; margin-bottom: 12px; }
+    @media print { #print-btn { display: none; } body { margin: 12px; } }
+  </style>
+</head>
+<body>
+  <button id="print-btn" onclick="window.print()">Print / Save as PDF</button>
+  <h1>Winton Pre-School Little Explorers Wages Sheet</h1>
+  <div class="header">
+    <div>Name: &nbsp;<strong>${member.name}</strong></div>
+    <div>Month: <strong>${monthLabel}</strong></div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Monday</th><th>Tuesday</th><th>Wednesday</th><th>Thursday</th><th>Friday</th>
+        <th style="white-space:nowrap;">Total Wkly<br>Hours</th>
+      </tr>
+    </thead>
+    <tbody>${rowsHTML}</tbody>
+  </table>
+  <table>
+    <tbody>
+      ${summaryRows}
+      ${payRow}
+    </tbody>
+  </table>
+</body>
+</html>`
+}
+
 // ─── Timesheet Panel ──────────────────────────────────────────────────────────
 
 function TimesheetPanel({ member, timesheets, hoursLog, monthlyData }: {
@@ -184,8 +301,49 @@ function TimesheetPanel({ member, timesheets, hoursLog, monthlyData }: {
 
   const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
 
+  function openPDF(y: number, m: number) {
+    const md = monthlyData.find(x => x.year === y && x.month === m)
+    const html = generateTimesheetHTML(member, y, m, timesheets, md)
+    const w = window.open('', '_blank')
+    if (w) { w.document.write(html); w.document.close() }
+  }
+
+  const savedMonths = monthlyData.slice().sort((a, b) =>
+    b.year !== a.year ? b.year - a.year : b.month - a.month
+  )
+
   return (
     <div>
+      {/* Saved timesheets list */}
+      {savedMonths.length > 0 && (
+        <div className="mb-5 border border-gray-200 rounded-xl p-4">
+          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Saved Timesheets</h4>
+          <div className="flex flex-wrap gap-2">
+            {savedMonths.map(m => {
+              const label = new Date(m.year, m.month - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+              const isCurrent = m.year === year && m.month === month
+              return (
+                <div key={m.id} className={`flex items-center rounded-lg border overflow-hidden text-sm ${isCurrent ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-gray-50'}`}>
+                  <button
+                    onClick={() => { setYear(m.year); setMonth(m.month) }}
+                    className={`px-3 py-1.5 font-medium ${isCurrent ? 'text-blue-800' : 'text-gray-700 hover:text-gray-900'}`}
+                  >
+                    {label}
+                  </button>
+                  <button
+                    onClick={() => openPDF(m.year, m.month)}
+                    className="px-2.5 py-1.5 border-l border-gray-200 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors"
+                    title="Open PDF in new tab"
+                  >
+                    PDF ↗
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Month navigator */}
       <div className="flex items-center justify-between mb-4 bg-gray-50 rounded-xl px-3 py-2">
         <button onClick={prevMonth} className="px-3 py-1 text-sm font-bold text-gray-600 bg-white hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors">← Prev</button>
@@ -358,13 +516,23 @@ function TimesheetPanel({ member, timesheets, hoursLog, monthlyData }: {
         </div>
       </div>
 
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className={`w-full py-2.5 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50 ${saved ? 'bg-green-600' : 'bg-blue-800 hover:bg-blue-900'}`}
-      >
-        {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save timesheet'}
-      </button>
+      <div className="flex gap-2">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className={`flex-1 py-2.5 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50 ${saved ? 'bg-green-600' : 'bg-blue-800 hover:bg-blue-900'}`}
+        >
+          {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save timesheet'}
+        </button>
+        {monthlyData.some(m => m.year === year && m.month === month) && (
+          <button
+            onClick={() => openPDF(year, month)}
+            className="px-4 py-2.5 text-sm font-semibold text-blue-800 border border-blue-300 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors whitespace-nowrap"
+          >
+            PDF ↗
+          </button>
+        )}
+      </div>
     </div>
   )
 }
