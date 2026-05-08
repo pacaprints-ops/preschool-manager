@@ -12,6 +12,7 @@ const navLinks = [
 ]
 const adminLinks = [
   { href: '/waiting-list', label: 'Waiting List' },
+  { href: '/admin/keyworkers', label: 'Key Workers' },
   { href: '/admin/invoicing', label: 'Invoicing' },
   { href: '/admin/staff', label: 'Staff' },
   { href: '/admin/terms', label: 'Term Dates' },
