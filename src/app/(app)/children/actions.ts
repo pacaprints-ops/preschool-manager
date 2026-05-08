@@ -156,31 +156,70 @@ export async function deleteNote(id: string, childId: string) {
 
 export async function addAccidentForm(childId: string, reportedById: string, data: {
   incidentDate: string
+  incidentType: string
+  incidentLocation?: string
   description: string
   injury: string
   actionTaken: string
-  parentNotified: boolean
+  isHeadInjury: boolean
+  headInjuryAdviceGiven: boolean
+  headInjuryMonitoringFollowed: boolean
+  firstAidPersonId?: string
+  firstAidAdministered?: string
   bodyLocation?: string
+  parentNotified: boolean
+  parentNotifiedAt?: string
+  parentCarerName?: string
   parentSignature?: string
+  previousConcerns?: string
+  previousConcernsOther?: string
+  dslInformedAt?: string
 }) {
   await db.insert(accidentForms).values({
     childId,
     reportedById,
     incidentDate: new Date(data.incidentDate),
+    incidentType: data.incidentType,
+    incidentLocation: data.incidentLocation ?? null,
     description: data.description,
     injury: data.injury,
     actionTaken: data.actionTaken,
-    parentNotified: data.parentNotified,
+    isHeadInjury: data.isHeadInjury,
+    headInjuryAdviceGiven: data.headInjuryAdviceGiven,
+    headInjuryMonitoringFollowed: data.headInjuryMonitoringFollowed,
+    firstAidPersonId: data.firstAidPersonId ?? null,
+    firstAidAdministered: data.firstAidAdministered ?? null,
     bodyLocation: data.bodyLocation ?? null,
+    parentNotified: data.parentNotified,
+    parentNotifiedAt: data.parentNotifiedAt ? new Date(data.parentNotifiedAt) : null,
+    parentCarerName: data.parentCarerName ?? null,
     parentSignature: data.parentSignature || null,
     parentSignedAt: data.parentSignature ? new Date() : null,
+    previousConcerns: data.previousConcerns ?? null,
+    previousConcernsOther: data.previousConcernsOther ?? null,
+    dslInformedAt: data.dslInformedAt ? new Date(data.dslInformedAt) : null,
   })
   revalidatePath(`/children/${childId}`)
 }
 
-export async function signAccidentForm(formId: string, childId: string, signature: string) {
+export async function signAccidentForm(formId: string, childId: string, signature: string, parentCarerName?: string) {
   await db.update(accidentForms)
-    .set({ parentSignature: signature, parentSignedAt: new Date() })
+    .set({ parentSignature: signature, parentSignedAt: new Date(), ...(parentCarerName ? { parentCarerName } : {}) })
+    .where(eq(accidentForms.id, formId))
+  revalidatePath(`/children/${childId}`)
+}
+
+export async function updateAccidentDsl(formId: string, childId: string, data: {
+  previousConcerns?: string
+  previousConcernsOther?: string
+  dslInformedAt?: string
+}) {
+  await db.update(accidentForms)
+    .set({
+      previousConcerns: data.previousConcerns ?? null,
+      previousConcernsOther: data.previousConcernsOther ?? null,
+      dslInformedAt: data.dslInformedAt ? new Date(data.dslInformedAt) : null,
+    })
     .where(eq(accidentForms.id, formId))
   revalidatePath(`/children/${childId}`)
 }

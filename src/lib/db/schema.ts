@@ -148,15 +148,31 @@ export const accidentForms = pgTable('accident_forms', {
   childId: uuid('child_id').notNull().references(() => children.id),
   reportedById: uuid('reported_by_id').notNull().references(() => users.id),
   incidentDate: timestamp('incident_date').notNull(),
+  // within_provision | out_of_setting
+  incidentType: text('incident_type').notNull().default('within_provision'),
+  incidentLocation: text('incident_location'),
   description: text('description').notNull(),
   injury: text('injury').notNull(),
   actionTaken: text('action_taken').notNull(),
-  parentNotified: boolean('parent_notified').notNull().default(false),
+  // Head injury
+  isHeadInjury: boolean('is_head_injury').notNull().default(false),
+  headInjuryAdviceGiven: boolean('head_injury_advice_given').notNull().default(false),
+  headInjuryMonitoringFollowed: boolean('head_injury_monitoring_followed').notNull().default(false),
+  // First aid
+  firstAidPersonId: uuid('first_aid_person_id').references(() => users.id),
+  firstAidAdministered: text('first_aid_administered'),
   // Body injury location — JSON string: {x: number, y: number} in SVG viewBox coords
   bodyLocation: text('body_location'),
-  // Parent signature — base64 PNG data URL
+  // Parent / carer
+  parentNotified: boolean('parent_notified').notNull().default(false),
+  parentNotifiedAt: timestamp('parent_notified_at'),
+  parentCarerName: text('parent_carer_name'),
   parentSignature: text('parent_signature'),
   parentSignedAt: timestamp('parent_signed_at'),
+  // DSL / previous concerns — JSON array: ('injury'|'health'|'developmental'|'safeguarding'|'other')[]
+  previousConcerns: text('previous_concerns'),
+  previousConcernsOther: text('previous_concerns_other'),
+  dslInformedAt: timestamp('dsl_informed_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
