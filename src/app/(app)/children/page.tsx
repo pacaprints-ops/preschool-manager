@@ -1,6 +1,6 @@
 import { db } from '@/lib/db'
 import { children, childSessions, users } from '@/lib/db/schema'
-import { eq, asc } from 'drizzle-orm'
+import { eq, asc, desc } from 'drizzle-orm'
 import ChildrenClient from './ChildrenClient'
 
 export default async function ChildrenPage() {
@@ -9,7 +9,7 @@ export default async function ChildrenPage() {
     .from(children)
     .leftJoin(users, eq(children.keyWorkerId, users.id))
     .where(eq(children.archived, false))
-    .orderBy(asc(children.dateOfBirth), asc(children.firstName), asc(children.lastName))
+    .orderBy(desc(children.dateOfBirth), asc(children.firstName), asc(children.lastName))
 
   const sessions = await db.select().from(childSessions)
   const sessionMap: Record<string, typeof sessions> = {}

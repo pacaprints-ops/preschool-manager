@@ -2,9 +2,9 @@ import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import {
   children, childSessions, registerEntries, registerNotes, accidentForms,
-  staffDailyAttendance, buildingVisitors, users,
+  staffDailyAttendance, buildingVisitors, users, childHolidays,
 } from '@/lib/db/schema'
-import { eq, and, inArray, isNull, asc } from 'drizzle-orm'
+import { eq, and, inArray, isNull, lte, gte, desc, asc } from 'drizzle-orm'
 import { format } from 'date-fns'
 import RegisterClient from './RegisterClient'
 
@@ -21,7 +21,7 @@ export default async function RegisterPage() {
     .from(childSessions)
     .innerJoin(children, eq(childSessions.childId, children.id))
     .where(and(eq(childSessions.day, dayName), eq(children.archived, false)))
-    .orderBy(asc(children.dateOfBirth), asc(children.firstName), asc(children.lastName))
+    .orderBy(desc(children.dateOfBirth), asc(children.firstName), asc(children.lastName))
 
   const [
     existingEntries,
@@ -49,6 +49,18 @@ export default async function RegisterPage() {
     : []
   const unsignedChildIds = new Set(unsignedAccidents.map(f => f.childId))
 
+  // Children booked as on holiday today
+  const holidaysToday = todayChildIds.length > 0
+    ? await db.select({ childId: childHolidays.childId })
+        .from(childHolidays)
+        .where(and(
+          inArray(childHolidays.childId, todayChildIds),
+          lte(childHolidays.startDate, todayStr),
+          gte(childHolidays.endDate, todayStr),
+        ))
+    : []
+  const onHolidayChildIds = new Set(holidaysToday.map(h => h.childId))
+
   const entryMap = Object.fromEntries(
     existingEntries.map(e => [`${e.childId}-${e.sessionType}`, e])
   )
@@ -73,6 +85,7 @@ export default async function RegisterPage() {
       hasAllergies: child.hasAllergies,
       allergies: child.allergies,
       medicalNotes: child.medicalNotes,
+      onHoliday: onHolidayChildIds.has(child.id),
       existing: entry ? {
         id: entry.id,
         status: entry.status,
@@ -121,7 +134,6 @@ export default async function RegisterPage() {
       todayStr={todayStr}
       dayName={dayName}
       presentCount={presentCount}
-      totalCount={registerRows.length}
       userId={session?.user?.id ?? ''}
       userName={session?.user?.name ?? session?.user?.email ?? ''}
       initialNotes={noteMap}

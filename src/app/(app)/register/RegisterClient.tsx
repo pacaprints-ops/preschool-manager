@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   markAttendance, saveRegisterNote, signOutChild, saveDroppedBy,
@@ -23,6 +23,7 @@ type RegisterRow = {
   hasAllergies: boolean
   allergies: string | null
   medicalNotes: string | null
+  onHoliday: boolean
   sessionNote: { note: string; completed: boolean; completedByName: string | null } | null
   hasUnsignedAccident: boolean
   existing: {
@@ -90,24 +91,6 @@ function birthdayThisWeek(dob: string, todayStr: string): boolean {
   return false
 }
 
-function getAgeYears(dob: string): number {
-  const birth = new Date(dob + 'T12:00:00')
-  const now = new Date()
-  let age = now.getFullYear() - birth.getFullYear()
-  const m = now.getMonth() - birth.getMonth()
-  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--
-  return age
-}
-
-function calcStaff(subset: RegisterRow[]): { staff: number; count2yr: number; count34yr: number; count1to1: number } {
-  const count1to1 = subset.filter(r => r.needs1to1).length
-  const general = subset.filter(r => !r.needs1to1)
-  const count2yr = general.filter(r => getAgeYears(r.dateOfBirth) === 2).length
-  const count34yr = general.filter(r => getAgeYears(r.dateOfBirth) >= 3).length
-  const staff = Math.ceil(count2yr / 4) + Math.ceil(count34yr / 8) + count1to1
-  return { staff, count2yr, count34yr, count1to1 }
-}
-
 function fmtTime(iso: string | null): string | null {
   if (!iso) return null
   const d = new Date(iso)
@@ -117,68 +100,6 @@ function fmtTime(iso: string | null): string | null {
 function localTimeNow(): string {
   const now = new Date()
   return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-}
-
-// ─── Ratio Widget ──────────────────────────────────────────────────────────────
-
-function RatioWidget({ rows, statuses }: {
-  rows: RegisterRow[]
-  statuses: Record<string, 'present' | 'absent' | null>
-}) {
-  const sessionTypes = [...new Set(rows.map(r => r.sessionType))] as ('morning' | 'afternoon' | 'full_day')[]
-
-  return (
-    <div className="mb-4 bg-white rounded-xl border border-gray-200 px-3 py-2.5 print:hidden">
-      <div className={`grid gap-4 ${sessionTypes.length === 1 ? 'grid-cols-1' : sessionTypes.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-        {sessionTypes.map(st => {
-          const sessionRows = rows.filter(r => r.sessionType === st)
-          const exp = calcStaff(sessionRows)
-          const presentRows = sessionRows.filter(r => statuses[`${r.childId}-${r.sessionType}`] === 'present')
-          const live = calcStaff(presentRows)
-          const show1to1 = exp.count1to1 > 0 || live.count1to1 > 0
-
-          return (
-            <div key={st}>
-              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{SESSION_LABELS[st]}</div>
-              <table className="w-full text-xs">
-                <thead>
-                  <tr>
-                    <th className="text-left font-normal text-gray-400 pb-0.5 w-full" />
-                    <th className="text-right font-medium text-gray-400 pb-0.5 pr-3 whitespace-nowrap">Exp</th>
-                    <th className="text-right font-medium text-[#020e2f] pb-0.5 whitespace-nowrap">Live</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="text-gray-500 py-0.5">2yr <span className="text-gray-300">1:4</span></td>
-                    <td className="text-right text-gray-500 pr-3 py-0.5">{exp.count2yr}</td>
-                    <td className="text-right font-semibold text-gray-800 py-0.5">{live.count2yr}</td>
-                  </tr>
-                  <tr>
-                    <td className="text-gray-500 py-0.5">3–4yr <span className="text-gray-300">1:8</span></td>
-                    <td className="text-right text-gray-500 pr-3 py-0.5">{exp.count34yr}</td>
-                    <td className="text-right font-semibold text-gray-800 py-0.5">{live.count34yr}</td>
-                  </tr>
-                  {show1to1 && (
-                    <tr>
-                      <td className="text-purple-500 py-0.5">1-2-1</td>
-                      <td className="text-right text-gray-500 pr-3 py-0.5">{exp.count1to1}</td>
-                      <td className="text-right font-semibold text-purple-600 py-0.5">{live.count1to1}</td>
-                    </tr>
-                  )}
-                  <tr className="border-t border-gray-100">
-                    <td className="text-gray-700 font-semibold pt-1">Staff</td>
-                    <td className="text-right text-gray-500 font-semibold pr-3 pt-1">{exp.staff}</td>
-                    <td className="text-right font-bold text-[#020e2f] pt-1">{live.staff}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
 }
 
 // ─── Staff Sign-In Modal ───────────────────────────────────────────────────────
@@ -621,7 +542,6 @@ export default function RegisterClient({
   todayStr,
   dayName,
   presentCount: initialPresentCount,
-  totalCount,
   userId,
   userName,
   initialNotes,
@@ -634,7 +554,6 @@ export default function RegisterClient({
   todayStr: string
   dayName: string
   presentCount: number
-  totalCount: number
   userId: string
   userName: string
   initialNotes: Record<string, { note: string; completed: boolean; completedByName: string | null }>
@@ -680,6 +599,9 @@ export default function RegisterClient({
   const [droppedByValues, setDroppedByValues] = useState<Record<string, string>>(
     Object.fromEntries(rows.map(r => [`${r.childId}-${r.sessionType}`, r.existing?.droppedBy ?? '']))
   )
+  const [droppedBySaved, setDroppedBySaved] = useState<Record<string, boolean>>({})
+  const [justMarkedKey, setJustMarkedKey] = useState<string | null>(null)
+  const droppedByRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const [is48h, setIs48h] = useState<Record<string, boolean>>({})
   const [savingAbsence, setSavingAbsence] = useState<Record<string, boolean>>({})
   const [signingOut, setSigningOut] = useState<Record<string, boolean>>({})
@@ -699,6 +621,7 @@ export default function RegisterClient({
   useEffect(() => { setVisitorsLocal(visitors) }, [visitorsKey])
 
   const presentCount = Object.values(statuses).filter(s => s === 'present').length
+  const holidayCount = rows.filter(r => r.onHoliday).length
 
   async function save(childId: string, sessionType: string, overrides?: {
     status?: 'present' | 'absent' | null
@@ -754,6 +677,10 @@ export default function RegisterClient({
       const key = `${r.childId}-${r.sessionType}`
       return statuses[key] === 'present' && !!signedOutTimes[key]
     })
+    const stillPresent = rows.filter(r => {
+      const key = `${r.childId}-${r.sessionType}`
+      return statuses[key] === 'present' && !signedOutTimes[key]
+    })
 
     if (toUpdate.length > 0) {
       setSignedOutTimes(t => {
@@ -769,7 +696,13 @@ export default function RegisterClient({
       setEndingSession(false)
     }
 
-    setEndSessionDone(true)
+    if (stillPresent.length > 0) {
+      setEndSessionWarning(stillPresent.length)
+      setEndSessionDone(false)
+    } else {
+      setEndSessionWarning(0)
+      setEndSessionDone(true)
+    }
   }
 
   async function handleMark(childId: string, sessionType: string, status: 'present' | 'absent') {
@@ -779,6 +712,7 @@ export default function RegisterClient({
     setStatuses(s => ({ ...s, [key]: newStatus }))
     if (status === 'present' && newStatus === 'present' && !signedInTimes[key]) {
       setSignedInTimes(t => ({ ...t, [key]: localTimeNow() }))
+      setJustMarkedKey(key)
     }
     if (status === 'absent') {
       setExpandedAbsence(e => ({ ...e, [key]: newStatus === 'absent' }))
@@ -787,6 +721,21 @@ export default function RegisterClient({
     }
     await save(childId, sessionType, { status: newStatus })
     setLoading(l => ({ ...l, [key]: false }))
+  }
+
+  // When a child is freshly marked present, jump straight into the
+  // "who dropped off" field so staff don't need an extra click
+  useEffect(() => {
+    if (justMarkedKey) {
+      droppedByRefs.current[justMarkedKey]?.focus()
+      setJustMarkedKey(null)
+    }
+  }, [justMarkedKey])
+
+  async function handleSaveDroppedBy(childId: string, sessionType: 'morning' | 'afternoon' | 'full_day', key: string) {
+    await saveDroppedBy(childId, sessionType, todayStr, droppedByValues[key] ?? '')
+    setDroppedBySaved(v => ({ ...v, [key]: true }))
+    setTimeout(() => setDroppedBySaved(v => ({ ...v, [key]: false })), 1500)
   }
 
   async function handleSaveAbsence(childId: string, sessionType: 'morning' | 'afternoon' | 'full_day') {
@@ -868,9 +817,9 @@ export default function RegisterClient({
               </div>
               <div className="text-xs text-red-500">Absent</div>
             </div>
-            <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 sm:px-4 py-2 text-center">
-              <div className="text-xl sm:text-2xl font-bold text-gray-600">{totalCount}</div>
-              <div className="text-xs text-gray-500">Expected</div>
+            <div className="bg-cyan-50 border border-cyan-200 rounded-lg px-3 sm:px-4 py-2 text-center">
+              <div className="text-xl sm:text-2xl font-bold text-cyan-700">{holidayCount}</div>
+              <div className="text-xs text-cyan-600">Holiday</div>
             </div>
             <button
               onClick={handleEndSession}
@@ -921,8 +870,6 @@ export default function RegisterClient({
           )
         })()}
 
-        {/* Ratio widget */}
-        <RatioWidget rows={rows} statuses={statuses} />
 
         {/* Children register */}
         <div className="space-y-2">
@@ -963,6 +910,9 @@ export default function RegisterClient({
                       {row.hasAllergies && (
                         <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">⚠ Allergy</span>
                       )}
+                      {row.onHoliday && (
+                        <span className="text-xs bg-cyan-100 text-cyan-700 px-1.5 py-0.5 rounded-full font-medium">🏖 Holiday</span>
+                      )}
                       {row.hasUnsignedAccident && (
                         <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">✎ Unsigned</span>
                       )}
@@ -989,14 +939,21 @@ export default function RegisterClient({
 
                   {/* Dropped by — inline when present */}
                   {status === 'present' && (
-                    <input
-                      type="text"
-                      value={droppedByValues[key] ?? ''}
-                      onChange={e => setDroppedByValues(v => ({ ...v, [key]: e.target.value }))}
-                      onBlur={() => saveDroppedBy(row.childId, row.sessionType, todayStr, droppedByValues[key] ?? '')}
-                      placeholder="Who dropped off?"
-                      className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-green-300 w-32 min-w-0"
-                    />
+                    <div className="flex items-center gap-1">
+                      <input
+                        ref={el => { droppedByRefs.current[key] = el }}
+                        type="text"
+                        value={droppedByValues[key] ?? ''}
+                        onChange={e => setDroppedByValues(v => ({ ...v, [key]: e.target.value }))}
+                        onBlur={() => handleSaveDroppedBy(row.childId, row.sessionType, key)}
+                        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                        placeholder="Who dropped off?"
+                        className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-green-300 w-32 min-w-0"
+                      />
+                      {droppedBySaved[key] && (
+                        <span className="text-green-600 text-xs shrink-0">✓</span>
+                      )}
+                    </div>
                   )}
 
                   {/* Note button */}
