@@ -211,6 +211,28 @@ export async function setNoteCompleted(
   revalidatePath('/register')
 }
 
+export async function endSession(
+  date: string,
+  children: Array<{ childId: string; sessionType: 'morning' | 'afternoon' | 'full_day' }>,
+) {
+  const signedOutAt = new Date(`${date}T15:00:00`)
+  for (const { childId, sessionType } of children) {
+    await db.update(registerEntries)
+      .set({ signedOutAt })
+      .where(and(
+        eq(registerEntries.childId, childId),
+        eq(registerEntries.sessionType, sessionType),
+        eq(registerEntries.date, date),
+      ))
+    // Exactly 3pm — no late fee, remove any pre-existing one
+    await db.delete(lateFeeInvoices).where(
+      and(eq(lateFeeInvoices.childId, childId), eq(lateFeeInvoices.date, date))
+    )
+  }
+  revalidatePath('/register')
+  revalidatePath('/admin/invoicing')
+}
+
 const SCHOOL_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const
 
 export async function apply48HourRule(childId: string, absenceDate: string) {

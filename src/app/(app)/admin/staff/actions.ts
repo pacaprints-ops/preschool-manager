@@ -5,6 +5,15 @@ import { staffSickness, staffHours, staffTraining, staffMonthlyTimesheets, users
 
 import { eq, and, gte, lte } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
+import bcrypt from 'bcryptjs'
+
+export async function adminResetPassword(userId: string, tempPassword: string) {
+  const passwordHash = await bcrypt.hash(tempPassword, 12)
+  await db.update(users)
+    .set({ passwordHash, resetToken: null, resetTokenExpiry: null })
+    .where(eq(users.id, userId))
+  revalidatePath('/admin/staff')
+}
 
 export async function updateWorkingDays(userId: string, days: string) {
   await db.update(users).set({ workingDays: days }).where(eq(users.id, userId))
@@ -42,7 +51,7 @@ export async function saveMonthlyTimesheetData(
   userId: string,
   year: number,
   month: number,
-  dailyEntries: { date: string; timeIn: string | null; timeOut: string | null; hoursWorked: string }[],
+  dailyEntries: { date: string; timeIn: string | null; timeOut: string | null; hoursWorked: string; type: string }[],
   summary: { additionalHours: string; additionalHoursNotes: string; totalKeyChildren: string; totalExtraHours: string; totalPay: string; notes: string },
 ) {
   const monthPad = String(month).padStart(2, '0')
@@ -62,6 +71,7 @@ export async function saveMonthlyTimesheetData(
       timeIn: e.timeIn,
       timeOut: e.timeOut,
       hoursWorked: e.hoursWorked,
+      type: e.type || 'work',
     })))
   }
 

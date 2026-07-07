@@ -40,6 +40,8 @@ export const users = pgTable('users', {
   emergencyContactRelationship: text('emergency_contact_relationship'),
   emergencyContactPhone: text('emergency_contact_phone'),
   emergencyContactPhone2: text('emergency_contact_phone2'),
+  resetToken: text('reset_token'),
+  resetTokenExpiry: timestamp('reset_token_expiry'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
@@ -94,10 +96,20 @@ export const children = pgTable('children', {
   consumableConsent: boolean('consumable_consent').notNull().default(false),
   // 1-2-1 keyworker requirement (EHCP / additional needs)
   needs1to1: boolean('needs_1to1').notNull().default(false),
-  // Funding / needs flags for termly register
-  dep: boolean('dep').notNull().default(false),
-  eypp: boolean('eypp').notNull().default(false),
-  sen: boolean('sen').notNull().default(false),
+  // Funding / needs flags for termly register and funding claims
+  dep: boolean('dep').notNull().default(false),          // deprivation supplement
+  eypp: boolean('eypp').notNull().default(false),        // Early Years Pupil Premium
+  sen: boolean('sen').notNull().default(false),          // SEN Inclusion Fund
+  senTier: text('sen_tier'),                             // '1' | '2' | '3' when sen = true
+  daf: boolean('daf').notNull().default(false),          // Disability Access Fund
+  extendedHours: boolean('extended_hours').notNull().default(false), // 30h extended entitlement
+  twoYearFunding: boolean('two_year_funding').notNull().default(false), // 2-year-old funded entitlement
+  // Parent / billing contact
+  parentName: text('parent_name'),
+  parentEmail: text('parent_email'),
+  parentPhone: text('parent_phone'),
+  // Deposit tracking — auto-credits £50 on first invoice when true
+  depositPaid: boolean('deposit_paid').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
@@ -128,11 +140,34 @@ export const emergencyContacts = pgTable('emergency_contacts', {
 export const medications = pgTable('medications', {
   id: uuid('id').primaryKey().defaultRandom(),
   childId: uuid('child_id').notNull().references(() => children.id),
-  name: text('name').notNull(),
-  dosage: text('dosage').notNull(),
-  frequency: text('frequency').notNull(),
+  // Core fields (legacy + used by the prescribed medicine form)
+  name: text('name').notNull(),        // medication name as on container
+  dosage: text('dosage').notNull(),    // dosage and method
+  frequency: text('frequency').notNull(), // timing
   adminConsent: boolean('admin_consent').notNull().default(false),
   notes: text('notes'),
+  // Prescribed medicine form fields
+  formDate: date('form_date'),
+  conditionDiagnosis: text('condition_diagnosis'),
+  conditionSymptoms: text('condition_symptoms'),
+  hospitalContactName: text('hospital_contact_name'),
+  hospitalContactPhone: text('hospital_contact_phone'),
+  doctorContactName: text('doctor_contact_name'),
+  doctorContactPhone: text('doctor_contact_phone'),
+  administeredAtHome: text('administered_at_home'),
+  durationOfTreatment: text('duration_of_treatment'),
+  dateDispensed: date('date_dispensed'),
+  storage: text('storage'),
+  expiryDate: date('expiry_date'),
+  specialPrecautions: text('special_precautions'),
+  possibleSideEffects: text('possible_side_effects'),
+  emergencyProcedures: text('emergency_procedures'),
+  parentSignature: text('parent_signature'),
+  parentPrintName: text('parent_print_name'),
+  staffSignature: text('staff_signature'),
+  staffPrintName: text('staff_print_name'),
+  signedDate: date('signed_date'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
 // ─── Child notes ──────────────────────────────────────────────────────────────
@@ -281,6 +316,7 @@ export const staffHours = pgTable('staff_hours', {
   timeIn: text('time_in'),   // HH:MM local
   timeOut: text('time_out'), // HH:MM local
   hoursWorked: numeric('hours_worked', { precision: 4, scale: 2 }).notNull(),
+  type: text('type').notNull().default('work'), // 'work' | 'holiday' | 'sick'
   notes: text('notes'),
 })
 
@@ -393,4 +429,59 @@ export const childSiblings = pgTable('child_siblings', {
   id: uuid('id').primaryKey().defaultRandom(),
   childId: uuid('child_id').notNull().references(() => children.id),
   siblingId: uuid('sibling_id').notNull().references(() => children.id),
+})
+
+// ─── School teddy log ─────────────────────────────────────────────────────────
+
+export const schoolTeddyLog = pgTable('school_teddy_log', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  childId: uuid('child_id').notNull().references(() => children.id),
+  takenDate: date('taken_date').notNull(),
+  returnedDate: date('returned_date'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
+// ─── Parent messages log ──────────────────────────────────────────────────────
+
+export const parentMessages = pgTable('parent_messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  subject: text('subject').notNull(),
+  body: text('body').notNull(),
+  recipientCount: integer('recipient_count').notNull().default(0),
+  sentByName: text('sent_by_name').notNull(),
+  sentAt: timestamp('sent_at').notNull().defaultNow(),
+  status: text('status').notNull().default('sent'), // 'sent' | 'failed'
+  filterType: text('filter_type').notNull().default('all'), // 'all' | 'morning' | 'afternoon' | 'full_day'
+})
+
+// ─── Invoice reminders log ────────────────────────────────────────────────────
+
+export const invoiceReminders = pgTable('invoice_reminders', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  invoiceId: uuid('invoice_id').notNull().references(() => invoices.id),
+  sentAt: timestamp('sent_at').notNull().defaultNow(),
+  email: text('email').notNull(),
+  type: text('type').notNull().default('reminder'), // 'initial' | 'reminder'
+})
+
+// ─── Enrolments (September intake planning) ───────────────────────────────────
+
+export const enrolments = pgTable('enrolments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  intakeYear: integer('intake_year').notNull().default(2027),
+  childFirstName: text('child_first_name').notNull(),
+  childLastName: text('child_last_name').notNull(),
+  dateOfBirth: date('date_of_birth'),
+  parentCarerName: text('parent_carer_name').notNull(),
+  contactPhone: text('contact_phone'),
+  contactEmail: text('contact_email'),
+  // JSON: {"monday": "morning", "wednesday": "full_day", ...}
+  daysSessions: text('days_sessions'),
+  notes: text('notes'),
+  welcomeFeePaid: boolean('welcome_fee_paid').notNull().default(false),
+  depositPaid: boolean('deposit_paid').notNull().default(false),
+  confirmedKeyworkerId: uuid('confirmed_keyworker_id').references(() => users.id),
+  promotedChildId: uuid('promoted_child_id').references(() => children.id),
+  addedAt: timestamp('added_at').notNull().defaultNow(),
 })

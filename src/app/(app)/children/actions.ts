@@ -24,6 +24,17 @@ export async function createChild(data: {
   photoConsent: boolean
   consumableConsent: boolean
   needs1to1: boolean
+  parentName?: string
+  parentEmail?: string
+  parentPhone?: string
+  depositPaid?: boolean
+  twoYearFunding?: boolean
+  extendedHours?: boolean
+  eypp?: boolean
+  sen?: boolean
+  senTier?: string
+  daf?: boolean
+  dep?: boolean
 }) {
   const [child] = await db.insert(children).values({
     firstName: data.firstName,
@@ -38,6 +49,17 @@ export async function createChild(data: {
     photoConsent: data.photoConsent,
     consumableConsent: data.consumableConsent,
     needs1to1: data.needs1to1,
+    parentName: data.parentName || null,
+    parentEmail: data.parentEmail || null,
+    parentPhone: data.parentPhone || null,
+    depositPaid: data.depositPaid ?? false,
+    twoYearFunding: data.twoYearFunding ?? false,
+    extendedHours: data.extendedHours ?? false,
+    eypp: data.eypp ?? false,
+    sen: data.sen ?? false,
+    senTier: data.senTier || null,
+    daf: data.daf ?? false,
+    dep: data.dep ?? false,
   }).returning()
 
   revalidatePath('/children')
@@ -130,8 +152,55 @@ export async function addMedication(childId: string, data: {
   frequency: string
   adminConsent: boolean
   notes?: string
+  formDate?: string
+  conditionDiagnosis?: string
+  conditionSymptoms?: string
+  hospitalContactName?: string
+  hospitalContactPhone?: string
+  doctorContactName?: string
+  doctorContactPhone?: string
+  administeredAtHome?: string
+  durationOfTreatment?: string
+  dateDispensed?: string
+  storage?: string
+  expiryDate?: string
+  specialPrecautions?: string
+  possibleSideEffects?: string
+  emergencyProcedures?: string
+  parentSignature?: string
+  parentPrintName?: string
+  staffSignature?: string
+  staffPrintName?: string
+  signedDate?: string
 }) {
-  await db.insert(medications).values({ childId, ...data, notes: data.notes || null })
+  await db.insert(medications).values({
+    childId,
+    name: data.name,
+    dosage: data.dosage,
+    frequency: data.frequency,
+    adminConsent: data.adminConsent,
+    notes: data.notes || null,
+    formDate: data.formDate || null,
+    conditionDiagnosis: data.conditionDiagnosis || null,
+    conditionSymptoms: data.conditionSymptoms || null,
+    hospitalContactName: data.hospitalContactName || null,
+    hospitalContactPhone: data.hospitalContactPhone || null,
+    doctorContactName: data.doctorContactName || null,
+    doctorContactPhone: data.doctorContactPhone || null,
+    administeredAtHome: data.administeredAtHome || null,
+    durationOfTreatment: data.durationOfTreatment || null,
+    dateDispensed: data.dateDispensed || null,
+    storage: data.storage || null,
+    expiryDate: data.expiryDate || null,
+    specialPrecautions: data.specialPrecautions || null,
+    possibleSideEffects: data.possibleSideEffects || null,
+    emergencyProcedures: data.emergencyProcedures || null,
+    parentSignature: data.parentSignature || null,
+    parentPrintName: data.parentPrintName || null,
+    staffSignature: data.staffSignature || null,
+    staffPrintName: data.staffPrintName || null,
+    signedDate: data.signedDate || null,
+  })
   revalidatePath(`/children/${childId}`)
 }
 
@@ -424,4 +493,34 @@ export async function deleteChildHoliday(id: string, childId: string) {
 
 export async function updateChildFundingFlag(childId: string, field: 'dep' | 'eypp' | 'sen', value: boolean) {
   await db.update(children).set({ [field]: value }).where(eq(children.id, childId))
+}
+
+export async function updateParentContact(childId: string, data: {
+  parentName: string | null
+  parentEmail: string | null
+  parentPhone: string | null
+}) {
+  await db.update(children).set(data).where(eq(children.id, childId))
+  revalidatePath(`/children/${childId}`)
+}
+
+export async function updateChildFunding(childId: string, data: {
+  twoYearFunding: boolean
+  extendedHours: boolean
+  eypp: boolean
+  sen: boolean
+  senTier: string | null
+  daf: boolean
+  dep: boolean
+}) {
+  await db.update(children).set({
+    twoYearFunding: data.twoYearFunding,
+    extendedHours: data.extendedHours,
+    eypp: data.eypp,
+    sen: data.sen,
+    senTier: data.senTier || null,
+    daf: data.daf,
+    dep: data.dep,
+  }).where(eq(children.id, childId))
+  revalidatePath(`/children/${childId}`)
 }

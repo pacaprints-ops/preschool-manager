@@ -1,10 +1,11 @@
 'use server'
 
 import { db } from '@/lib/db'
-import { invoices, children, childSessions, sessionConfig, terms, lateFeeInvoices } from '@/lib/db/schema'
-import { eq, and } from 'drizzle-orm'
+import { invoices, children, childSessions, sessionConfig, terms, lateFeeInvoices, invoiceReminders } from '@/lib/db/schema'
+import { eq, and, desc } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { countBankHolidaysInTerm } from '@/lib/bankHolidays'
+import { sendEmail, buildInvoiceEmail, buildLateFeeEmail } from '@/lib/email'
 
 function ageAtDate(dob: string, refDate: string): number {
   const d = new Date(dob)
@@ -96,7 +97,13 @@ export async function generateInvoices(termId: string, selectedChildIds?: string
     // Bank holidays: pre-school closed, no consumable fee charged those days
     const bankHolidayCount = countBankHolidaysInTerm(term[0].startDate, term[0].endDate)
     const bankHolidayDeduction = child.consumableConsent ? bankHolidayCount * contribution : 0
-    const amountDue = sessionCost + contributionTotal - bankHolidayDeduction
+
+    // Deposit credit: £50 returned on first ever invoice if deposit was paid
+    const priorInvoices = await db.select({ id: invoices.id }).from(invoices).where(eq(invoices.childId, child.id)).limit(1)
+    const isFirstInvoice = priorInvoices.length === 0
+    const depositCredit = (child.depositPaid && isFirstInvoice) ? -50 : 0
+
+    const amountDue = Math.max(0, sessionCost + contributionTotal - bankHolidayDeduction + depositCredit)
 
     await db.insert(invoices).values({
       childId: child.id,
@@ -110,12 +117,12 @@ export async function generateInvoices(termId: string, selectedChildIds?: string
       consumableConsent: child.consumableConsent,
       contributionTotal: contributionTotal.toFixed(2),
       fundedValue: fundedValue.toFixed(2),
-      adjustmentAmount: '0',
-      adjustmentNote: null,
+      adjustmentAmount: depositCredit !== 0 ? depositCredit.toFixed(2) : '0',
+      adjustmentNote: depositCredit !== 0 ? 'Term deposit deducted' : null,
       bankHolidayCount,
       amountDue: amountDue.toFixed(2),
       status: 'draft',
-      parentEmail: null,
+      parentEmail: child.parentEmail ?? null,
     })
     created++
   }
@@ -168,5 +175,115 @@ export async function markLateFeeUnpaid(id: string) {
 
 export async function deleteLateFee(id: string) {
   await db.delete(lateFeeInvoices).where(eq(lateFeeInvoices.id, id))
+  revalidatePath('/admin/invoicing')
+}
+
+export async function waiveLateFee(id: string, reason?: string) {
+  await db.update(lateFeeInvoices)
+    .set({ status: 'waived', notes: reason || null })
+    .where(eq(lateFeeInvoices.id, id))
+  revalidatePath('/admin/invoicing')
+}
+
+export async function sendInvoiceEmail(id: string, type: 'initial' | 'reminder' = 'initial') {
+  const rows = await db
+    .select({ invoice: invoices, child: children, term: terms })
+    .from(invoices)
+    .innerJoin(children, eq(invoices.childId, children.id))
+    .innerJoin(terms, eq(invoices.termId, terms.id))
+    .where(eq(invoices.id, id))
+    .limit(1)
+
+  if (!rows[0]) throw new Error('Invoice not found')
+  const { invoice: inv, child, term } = rows[0]
+  const email = inv.parentEmail
+  if (!email) throw new Error('No parent email on invoice')
+
+  const html = buildInvoiceEmail({
+    childName: `${child.firstName} ${child.lastName}`,
+    termName: term.name,
+    paidSessions: inv.paidSessions,
+    fundedSessions: inv.fundedSessions,
+    sessionCost: inv.sessionCost,
+    contributionTotal: inv.contributionTotal,
+    bankHolidayCount: inv.bankHolidayCount,
+    adjustmentAmount: inv.adjustmentAmount,
+    adjustmentNote: inv.adjustmentNote,
+    amountDue: inv.amountDue,
+    parentEmail: email,
+  })
+
+  await sendEmail(email, `Winton Pre-School — Invoice for ${term.name}`, html)
+
+  await db.update(invoices).set({ status: 'sent', sentAt: new Date() }).where(eq(invoices.id, id))
+  await db.insert(invoiceReminders).values({ invoiceId: id, email, type })
+
+  revalidatePath('/admin/invoicing')
+}
+
+export async function sendOverdueReminders(termId: string): Promise<number> {
+  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
+
+  // Fetch all 'sent' invoices for this term that have a parentEmail
+  const sentInvoices = await db
+    .select()
+    .from(invoices)
+    .where(and(eq(invoices.termId, termId), eq(invoices.status, 'sent')))
+
+  const eligible = sentInvoices.filter(inv => inv.parentEmail)
+
+  let count = 0
+  const now = new Date()
+
+  for (const inv of eligible) {
+    // Find most recent reminder sentAt for this invoice
+    const latestReminders = await db
+      .select({ sentAt: invoiceReminders.sentAt })
+      .from(invoiceReminders)
+      .where(eq(invoiceReminders.invoiceId, inv.id))
+      .orderBy(desc(invoiceReminders.sentAt))
+      .limit(1)
+
+    const latestReminderAt = latestReminders[0]?.sentAt ?? null
+
+    // Most recent contact = max of sentAt and latestReminderAt
+    const candidates: Date[] = []
+    if (inv.sentAt) candidates.push(inv.sentAt)
+    if (latestReminderAt) candidates.push(latestReminderAt)
+
+    // If never contacted, or last contact was 7+ days ago, send a reminder
+    if (
+      candidates.length === 0 ||
+      Math.max(...candidates.map(d => d.getTime())) <= now.getTime() - SEVEN_DAYS_MS
+    ) {
+      await sendInvoiceEmail(inv.id, 'reminder')
+      count++
+    }
+  }
+
+  return count
+}
+
+export async function sendLateFeeEmail(id: string) {
+  const rows = await db
+    .select({ fee: lateFeeInvoices, child: children })
+    .from(lateFeeInvoices)
+    .innerJoin(children, eq(lateFeeInvoices.childId, children.id))
+    .where(eq(lateFeeInvoices.id, id))
+    .limit(1)
+
+  if (!rows[0]) throw new Error('Late fee not found')
+  const { fee, child } = rows[0]
+  const email = child.parentEmail
+  if (!email) throw new Error('No parent email for this child')
+
+  const html = buildLateFeeEmail({
+    childName: `${child.firstName} ${child.lastName}`,
+    date: fee.date,
+    minutesLate: fee.minutesLate,
+    totalAmount: fee.totalAmount,
+  })
+
+  await sendEmail(email, `Winton Pre-School — Late collection fee`, html)
   revalidatePath('/admin/invoicing')
 }

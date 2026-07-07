@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   markAttendance, saveRegisterNote, signOutChild, saveDroppedBy,
-  apply48HourRule, setNoteCompleted as saveNoteCompleted,
+  apply48HourRule, setNoteCompleted as saveNoteCompleted, endSession,
 } from './actions'
 import {
   signInStaffForDay, updateStaffSignOut,
@@ -74,6 +74,20 @@ const DAY_LABELS: Record<string, string> = {
 
 const DAY_ABBR: Record<string, string> = {
   monday: 'mon', tuesday: 'tue', wednesday: 'wed', thursday: 'thu', friday: 'fri',
+}
+
+function birthdayThisWeek(dob: string, todayStr: string): boolean {
+  const today = new Date(todayStr + 'T12:00:00')
+  const dayOfWeek = today.getDay() // 0=Sun
+  const monday = new Date(today)
+  monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+  const birth = new Date(dob + 'T12:00:00')
+  for (let d = new Date(monday); d <= sunday; d.setDate(d.getDate() + 1)) {
+    if (birth.getMonth() === d.getMonth() && birth.getDate() === d.getDate()) return true
+  }
+  return false
 }
 
 function getAgeYears(dob: string): number {
@@ -670,6 +684,8 @@ export default function RegisterClient({
   const [savingAbsence, setSavingAbsence] = useState<Record<string, boolean>>({})
   const [signingOut, setSigningOut] = useState<Record<string, boolean>>({})
   const [endSessionWarning, setEndSessionWarning] = useState(0)
+  const [endSessionDone, setEndSessionDone] = useState(false)
+  const [endingSession, setEndingSession] = useState(false)
 
   // Staff + visitor state
   const [showStaffModal, setShowStaffModal] = useState(needsStaffSignIn)
@@ -731,15 +747,29 @@ export default function RegisterClient({
     setSigningOut(s => ({ ...s, [key]: false }))
   }
 
-  function handleEndSession() {
-    const remaining = rows.filter(
-      r => statuses[`${r.childId}-${r.sessionType}`] === 'present' && !signedOutTimes[`${r.childId}-${r.sessionType}`]
-    )
-    if (remaining.length > 0) {
-      setEndSessionWarning(remaining.length)
-      return
+  async function handleEndSession() {
+    // Only children who have already been manually signed out → normalise to exactly 3pm
+    // Children with no sign-out time are late pickups and must be left alone
+    const toUpdate = rows.filter(r => {
+      const key = `${r.childId}-${r.sessionType}`
+      return statuses[key] === 'present' && !!signedOutTimes[key]
+    })
+
+    if (toUpdate.length > 0) {
+      setSignedOutTimes(t => {
+        const updated = { ...t }
+        for (const r of toUpdate) updated[`${r.childId}-${r.sessionType}`] = '15:00'
+        return updated
+      })
+      setEndingSession(true)
+      await endSession(todayStr, toUpdate.map(r => ({
+        childId: r.childId,
+        sessionType: r.sessionType as 'morning' | 'afternoon' | 'full_day',
+      })))
+      setEndingSession(false)
     }
-    setEndSessionWarning(0)
+
+    setEndSessionDone(true)
   }
 
   async function handleMark(childId: string, sessionType: string, status: 'present' | 'absent') {
@@ -860,10 +890,36 @@ export default function RegisterClient({
         </div>
 
         {endSessionWarning > 0 && (
-          <div className="mb-4 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 text-sm text-amber-800 print:hidden">
-            <strong>{endSessionWarning} {endSessionWarning === 1 ? 'child is' : 'children are'} still signed in</strong> — please sign {endSessionWarning === 1 ? 'them' : 'each of them'} out individually so the correct time and any late fees are recorded.
+          <div className="mb-4 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 flex items-center justify-between print:hidden">
+            <p className="text-sm text-amber-800">
+              <strong>{endSessionWarning} {endSessionWarning === 1 ? 'child has' : 'children have'} not been signed out</strong> — sign {endSessionWarning === 1 ? 'them' : 'each of them'} out when collected.
+            </p>
+            <button onClick={() => setEndSessionWarning(0)} className="text-xs text-amber-500 hover:text-amber-700 ml-4 shrink-0">Dismiss</button>
           </div>
         )}
+
+        {endSessionDone && (
+          <div className="mb-4 bg-green-50 border border-green-200 rounded-lg px-4 py-3 flex items-center justify-between print:hidden">
+            <p className="text-sm text-green-800 font-medium">Session ended — all children signed out at 3:00pm.</p>
+            <button onClick={() => setEndSessionDone(false)} className="text-xs text-green-500 hover:text-green-700 ml-4">Dismiss</button>
+          </div>
+        )}
+
+        {/* Birthday banner */}
+        {(() => {
+          const birthdays = [...new Map(
+            rows
+              .filter(r => birthdayThisWeek(r.dateOfBirth, todayStr))
+              .map(r => [r.childId, r])
+          ).values()]
+          if (birthdays.length === 0) return null
+          return (
+            <div className="mb-4 bg-pink-50 border border-pink-200 rounded-lg px-4 py-3 text-sm text-pink-800 print:hidden">
+              🎂 <strong>Birthday this week:</strong>{' '}
+              {birthdays.map(r => `${r.firstName} ${r.lastName}`).join(', ')}
+            </div>
+          )
+        })()}
 
         {/* Ratio widget */}
         <RatioWidget rows={rows} statuses={statuses} />
@@ -901,6 +957,9 @@ export default function RegisterClient({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-medium text-gray-900 text-sm">{row.firstName} {row.lastName}</span>
+                      {birthdayThisWeek(row.dateOfBirth, todayStr) && (
+                        <span className="text-xs bg-pink-100 text-pink-700 px-1.5 py-0.5 rounded-full font-medium">🎂 Birthday</span>
+                      )}
                       {row.hasAllergies && (
                         <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">⚠ Allergy</span>
                       )}

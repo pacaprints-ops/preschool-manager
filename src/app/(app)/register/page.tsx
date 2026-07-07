@@ -21,7 +21,7 @@ export default async function RegisterPage() {
     .from(childSessions)
     .innerJoin(children, eq(childSessions.childId, children.id))
     .where(and(eq(childSessions.day, dayName), eq(children.archived, false)))
-    .orderBy(asc(children.dateOfBirth))
+    .orderBy(asc(children.dateOfBirth), asc(children.firstName), asc(children.lastName))
 
   const [
     existingEntries,
@@ -108,6 +108,13 @@ export default async function RegisterPage() {
     signedOutAt: v.signedOutAt ? v.signedOutAt.toISOString() : null,
   }))
 
+  const seenNames = new Set<string>()
+  const uniqueStaff = allStaff.filter(s => {
+    if (seenNames.has(s.name)) return false
+    seenNames.add(s.name)
+    return true
+  })
+
   return (
     <RegisterClient
       rows={registerRows}
@@ -120,7 +127,7 @@ export default async function RegisterPage() {
       initialNotes={noteMap}
       staffAttendance={staffRows}
       visitors={visitorRows}
-      allStaff={allStaff}
+      allStaff={uniqueStaff}
       needsStaffSignIn={staffAttendanceToday.length === 0}
     />
   )

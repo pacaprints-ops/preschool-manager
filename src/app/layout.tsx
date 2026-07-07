@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Nunito } from "next/font/google";
 import Providers from "@/components/providers";
+import { SITE_URL } from "@/lib/site";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,9 +14,59 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const nunito = Nunito({
+  variable: "--font-nunito",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+});
+
+const title = "Winton Pre-School Little Explorers";
+const description = "A warm, nurturing pre-school in Bournemouth for children aged 2–5. Government-funded places available.";
+
 export const metadata: Metadata = {
-  title: "Winton Pre-School",
-  description: "Winton Pre-School Little Explorers — Staff Portal",
+  metadataBase: new URL(SITE_URL),
+  title,
+  description,
+  openGraph: {
+    title,
+    description,
+    url: SITE_URL,
+    siteName: title,
+    images: ["/images/staff.jpeg"],
+    locale: "en_GB",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description,
+    images: ["/images/staff.jpeg"],
+  },
+};
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "ChildCare",
+  name: title,
+  description,
+  url: SITE_URL,
+  image: `${SITE_URL}/images/staff.jpeg`,
+  telephone: "+447305240440",
+  email: "info@wintonpreschool.org.uk",
+  address: {
+    "@type": "PostalAddress",
+    streetAddress: "St Bernadette's Church Hall, 46 Draycott Rd",
+    addressLocality: "Bournemouth",
+    postalCode: "BH10 5AR",
+    addressCountry: "GB",
+  },
+  openingHoursSpecification: {
+    "@type": "OpeningHoursSpecification",
+    dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+    opens: "09:00",
+    closes: "15:00",
+  },
+  priceRange: "££",
 };
 
 export default function RootLayout({
@@ -26,9 +77,13 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${nunito.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
         <Providers>{children}</Providers>
       </body>
     </html>

@@ -9,22 +9,29 @@ const navLinks = [
   { href: '/register', label: 'Register' },
   { href: '/children', label: 'Children' },
   { href: '/admin/ratios', label: 'Termly Register' },
+  { href: '/enrolments', label: 'Enrolments' },
+  { href: '/admin/keyworkers', label: 'Key Workers' },
+]
+const staffOnlyLinks = [
+  { href: '/admin/staff', label: 'My Record' },
 ]
 const adminLinks = [
-  { href: '/waiting-list', label: 'Waiting List' },
-  { href: '/admin/keyworkers', label: 'Key Workers' },
-  { href: '/admin/invoicing', label: 'Invoicing' },
   { href: '/admin/staff', label: 'Staff' },
-  { href: '/admin/terms', label: 'Term Dates' },
+]
+const sharedAdminLinks = [
+  { href: '/admin', label: 'Admin' },
 ]
 
 export default function NavClient({ isAdmin }: { isAdmin: boolean }) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
 
-  const allLinks = isAdmin ? [...navLinks, ...adminLinks] : navLinks
+  const allLinks = isAdmin
+    ? [...navLinks, ...adminLinks, ...sharedAdminLinks]
+    : [...navLinks, ...staffOnlyLinks, ...sharedAdminLinks]
 
   function isActive(href: string) {
+    if (href === '/admin') return pathname === '/admin'
     return pathname === href || pathname.startsWith(href + '/')
   }
 
@@ -33,7 +40,7 @@ export default function NavClient({ isAdmin }: { isAdmin: boolean }) {
       <div className="max-w-6xl mx-auto px-4">
 
         {/* Desktop */}
-        <div className="hidden md:flex items-center h-14 gap-1">
+        <div className="hidden lg:flex items-center h-14 gap-1">
           <span className="font-bold text-sm tracking-wide text-white/90 mr-3 shrink-0">
             Winton Pre-School
           </span>
@@ -49,22 +56,29 @@ export default function NavClient({ isAdmin }: { isAdmin: boolean }) {
                 {link.label}
               </Link>
             ))}
-            {isAdmin && (
-              <>
-                <span className="mx-2 text-white/20 select-none">|</span>
-                {adminLinks.map(link => (
-                  <Link key={link.href} href={link.href}
-                    className={`px-3 py-1.5 rounded text-sm transition-colors ${
-                      isActive(link.href)
-                        ? 'bg-white/20 text-white font-medium'
-                        : 'text-white/75 hover:bg-white/10 hover:text-white'
-                    }`}
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-              </>
-            )}
+            <span className="mx-2 text-white/20 select-none">|</span>
+            {(isAdmin ? adminLinks : staffOnlyLinks).map(link => (
+              <Link key={link.href} href={link.href}
+                className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                  isActive(link.href)
+                    ? 'bg-white/20 text-white font-medium'
+                    : 'text-white/75 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
+            {sharedAdminLinks.map(link => (
+              <Link key={link.href} href={link.href}
+                className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                  isActive(link.href)
+                    ? 'bg-white/20 text-white font-medium'
+                    : 'text-white/75 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
           </div>
           <button
             onClick={() => signOut({ callbackUrl: '/login' })}
@@ -75,7 +89,7 @@ export default function NavClient({ isAdmin }: { isAdmin: boolean }) {
         </div>
 
         {/* Mobile header */}
-        <div className="flex md:hidden items-center justify-between h-14">
+        <div className="flex lg:hidden items-center justify-between h-14">
           <span className="font-bold text-sm tracking-wide">Winton Pre-School</span>
           <button
             onClick={() => setOpen(!open)}
@@ -100,7 +114,7 @@ export default function NavClient({ isAdmin }: { isAdmin: boolean }) {
 
       {/* Mobile dropdown */}
       {open && (
-        <div className="md:hidden border-t border-white/10 bg-[#010922]">
+        <div className="lg:hidden border-t border-white/10 bg-[#010922]">
           <div className="max-w-6xl mx-auto px-2 py-2 space-y-0.5">
             {allLinks.map(link => (
               <Link

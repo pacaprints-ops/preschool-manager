@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { generateInvoices, markInvoicePaid, markInvoiceUnpaid, deleteInvoice, updateAdjustment, markLateFeePaid, markLateFeeUnpaid, deleteLateFee } from './actions'
+import { generateInvoices, markInvoicePaid, markInvoiceUnpaid, deleteInvoice, updateAdjustment, markLateFeePaid, markLateFeeUnpaid, deleteLateFee, waiveLateFee, sendInvoiceEmail, sendLateFeeEmail, sendOverdueReminders } from './actions'
 
 type Term = { id: string; name: string; academicYear: string; weekCount: number }
 type ActiveChild = { id: string; firstName: string; lastName: string }
@@ -17,7 +17,7 @@ type LateFeeRow = {
     paidAt: Date | null
     notes: string | null
   }
-  child: { id: string; firstName: string; lastName: string }
+  child: { id: string; firstName: string; lastName: string; parentEmail: string | null }
 }
 type InvoiceRow = {
   invoice: {
@@ -40,7 +40,33 @@ type InvoiceRow = {
     sentAt: Date | null
     paidAt: Date | null
   }
-  child: { id: string; firstName: string; lastName: string }
+  child: {
+    id: string
+    firstName: string
+    lastName: string
+    dateOfBirth: string
+    twoYearFunding: boolean
+    extendedHours: boolean
+    eypp: boolean
+    sen: boolean
+    senTier: string | null
+    daf: boolean
+    dep: boolean
+  }
+}
+
+type SessionConfig = {
+  type: string
+  hourlyRate2yo: string
+  hourlyRate34yo: string
+}
+
+type ReminderRow = {
+  id: string
+  invoiceId: string
+  sentAt: string
+  email: string
+  type: string
 }
 
 const STATUS_STYLE: Record<string, string> = {
@@ -57,11 +83,15 @@ export default function InvoicingClient({
   invoices,
   activeChildren,
   lateFees,
+  sessionConfigs,
+  reminders,
 }: {
   terms: Term[]
   invoices: InvoiceRow[]
   activeChildren: ActiveChild[]
   lateFees: LateFeeRow[]
+  sessionConfigs: SessionConfig[]
+  reminders: ReminderRow[]
 }) {
   const [selectedTerm, setSelectedTerm] = useState<string>(terms[terms.length - 1]?.id ?? '')
   const [generating, setGenerating] = useState(false)
@@ -72,9 +102,23 @@ export default function InvoicingClient({
   const [adjAmount, setAdjAmount] = useState('')
   const [adjNote, setAdjNote] = useState('')
   const [savingAdj, setSavingAdj] = useState(false)
+  const [waivingFeeId, setWaivingFeeId] = useState<string | null>(null)
+  const [waiveReason, setWaiveReason] = useState('')
+  const [sendingInvoiceId, setSendingInvoiceId] = useState<string | null>(null)
+  const [sendingLateFeeId, setSendingLateFeeId] = useState<string | null>(null)
+  const [sendingReminders, setSendingReminders] = useState(false)
+  const [remindersSent, setRemindersSent] = useState<number | null>(null)
 
   const termInvoices = invoices.filter(i => i.invoice.termId === selectedTerm)
   const totalDue = termInvoices.reduce((sum, i) => sum + parseFloat(i.invoice.amountDue), 0)
+
+  const termInvoiceIds = new Set(termInvoices.map(i => i.invoice.id))
+  const termReminders = reminders.filter(r => termInvoiceIds.has(r.invoiceId))
+  const remindersByInvoice = termReminders.reduce<Record<string, ReminderRow[]>>((acc, r) => {
+    if (!acc[r.invoiceId]) acc[r.invoiceId] = []
+    acc[r.invoiceId].push(r)
+    return acc
+  }, {})
   const totalPaid = termInvoices.filter(i => i.invoice.status === 'paid').reduce((sum, i) => sum + parseFloat(i.invoice.amountDue), 0)
   const outstanding = termInvoices.filter(i => i.invoice.status !== 'paid').length
 
@@ -101,6 +145,40 @@ export default function InvoicingClient({
     const count = await generateInvoices(selectedTerm, [...selectedChildIds])
     setGenerating(false)
     if (count === 0) alert('Invoices already generated for the selected children, or none found.')
+  }
+
+  async function handleSendLateFee(feeId: string) {
+    setSendingLateFeeId(feeId)
+    try {
+      await sendLateFeeEmail(feeId)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to send email')
+    }
+    setSendingLateFeeId(null)
+  }
+
+  async function handleSendInvoice(invId: string, alreadySent: boolean) {
+    if (alreadySent && !confirm('This invoice has already been sent. Send again?')) return
+    setSendingInvoiceId(invId)
+    try {
+      await sendInvoiceEmail(invId, alreadySent ? 'reminder' : 'initial')
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to send email')
+    }
+    setSendingInvoiceId(null)
+  }
+
+  async function handleSendReminders() {
+    if (!selectedTerm) return
+    setSendingReminders(true)
+    try {
+      const count = await sendOverdueReminders(selectedTerm)
+      setRemindersSent(count)
+      setTimeout(() => setRemindersSent(null), 5000)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to send reminders')
+    }
+    setSendingReminders(false)
   }
 
   function openAdjustment(inv: InvoiceRow['invoice']) {
@@ -167,24 +245,83 @@ export default function InvoicingClient({
           </div>
           <div className="divide-y divide-gray-100">
             {lateFees.map(({ fee, child }) => (
-              <div key={fee.id} className={`flex items-center justify-between px-4 py-3 gap-4 ${fee.status === 'paid' ? 'opacity-50' : ''}`}>
-                <div className="flex-1 min-w-0">
-                  <span className="font-medium text-gray-900 text-sm">{child.firstName} {child.lastName}</span>
-                  <span className="text-xs text-gray-500 ml-2">
-                    {new Date(fee.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                    {' — '}signed out {new Date(fee.signedOutAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-                    {' · '}{fee.minutesLate} min late
-                  </span>
+              <div key={fee.id} className={`px-4 py-3 ${fee.status !== 'unpaid' ? 'opacity-60' : ''}`}>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium text-gray-900 text-sm">{child.firstName} {child.lastName}</span>
+                    <span className="text-xs text-gray-500 ml-2">
+                      {new Date(fee.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                      {' — '}signed out {new Date(fee.signedOutAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                      {' · '}{fee.minutesLate} min late
+                    </span>
+                    {fee.status === 'waived' && (
+                      <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">
+                        Waived{fee.notes ? ` — ${fee.notes}` : ''}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-gray-900">£{parseFloat(fee.totalAmount).toFixed(2)}</span>
+                    {fee.status === 'unpaid' && (
+                      <>
+                        {child.parentEmail ? (
+                          <button
+                            onClick={() => handleSendLateFee(fee.id)}
+                            disabled={sendingLateFeeId === fee.id}
+                            className="text-xs text-indigo-700 hover:text-indigo-900 font-medium disabled:opacity-50"
+                          >
+                            {sendingLateFeeId === fee.id ? 'Sending…' : 'Send'}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-300" title="No email for this child">No email</span>
+                        )}
+                        <button onClick={() => markLateFeePaid(fee.id)} className="text-xs text-green-600 hover:text-green-700 font-medium">Mark paid</button>
+                        <button
+                          onClick={() => { setWaivingFeeId(fee.id); setWaiveReason('') }}
+                          className="text-xs text-amber-600 hover:text-amber-700 font-medium"
+                        >
+                          Waive
+                        </button>
+                      </>
+                    )}
+                    {fee.status === 'paid' && (
+                      <button onClick={() => markLateFeeUnpaid(fee.id)} className="text-xs text-gray-400 hover:text-gray-600">Unpaid</button>
+                    )}
+                    {fee.status === 'waived' && (
+                      <button onClick={() => markLateFeeUnpaid(fee.id)} className="text-xs text-gray-400 hover:text-gray-600">Undo waive</button>
+                    )}
+                    <button onClick={() => deleteLateFee(fee.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-bold text-gray-900">£{parseFloat(fee.totalAmount).toFixed(2)}</span>
-                  {fee.status !== 'paid' ? (
-                    <button onClick={() => markLateFeePaid(fee.id)} className="text-xs text-green-600 hover:text-green-700 font-medium">Mark paid</button>
-                  ) : (
-                    <button onClick={() => markLateFeeUnpaid(fee.id)} className="text-xs text-gray-400 hover:text-gray-600">Unpaid</button>
-                  )}
-                  <button onClick={() => deleteLateFee(fee.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
-                </div>
+
+                {/* Inline waive form */}
+                {waivingFeeId === fee.id && (
+                  <div className="mt-2 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    <input
+                      autoFocus
+                      value={waiveReason}
+                      onChange={e => setWaiveReason(e.target.value)}
+                      placeholder="Reason (optional — e.g. parent called ahead)"
+                      className="flex-1 text-xs bg-transparent outline-none text-gray-700 placeholder-gray-400"
+                    />
+                    <button
+                      onClick={async () => {
+                        await waiveLateFee(fee.id, waiveReason.trim() || undefined)
+                        setWaivingFeeId(null)
+                        setWaiveReason('')
+                      }}
+                      className="text-xs font-medium text-amber-700 hover:text-amber-900 whitespace-nowrap"
+                    >
+                      Confirm waive
+                    </button>
+                    <button
+                      onClick={() => { setWaivingFeeId(null); setWaiveReason('') }}
+                      className="text-xs text-gray-400 hover:text-gray-600"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -269,7 +406,7 @@ export default function InvoicingClient({
         </div>
       )}
 
-      {/* Stats */}
+      {/* Stats + funding claims */}
       {termInvoices.length > 0 && (
         <>
           <div className="grid grid-cols-3 gap-3">
@@ -287,8 +424,25 @@ export default function InvoicingClient({
             </div>
           </div>
 
-          {/* Mobile cards */}
-          <div className="sm:hidden space-y-3">
+          {/* 7-day reminder button */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSendReminders}
+              disabled={sendingReminders}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:border-gray-400 hover:bg-gray-50 disabled:opacity-50"
+            >
+              {sendingReminders ? 'Sending…' : 'Send 7-day reminders'}
+            </button>
+            {remindersSent !== null && (
+              <span className="text-sm text-green-600">{remindersSent} reminder{remindersSent !== 1 ? 's' : ''} sent</span>
+            )}
+          </div>
+
+          {/* Funding claims summary */}
+          <FundingClaimsPanel termInvoices={termInvoices} sessionConfigs={sessionConfigs} />
+
+          {/* Mobile/tablet cards */}
+          <div className="lg:hidden space-y-3">
             {termInvoices.map(({ invoice: inv, child }) => (
               <div key={inv.id} className={`bg-white rounded-xl border border-gray-200 p-4 ${inv.status === 'paid' ? 'opacity-60' : ''}`}>
                 <div className="flex items-start justify-between mb-2">
@@ -319,6 +473,17 @@ export default function InvoicingClient({
                     className="text-xs bg-blue-100 text-blue-900 hover:bg-blue-200 font-medium px-2.5 py-1 rounded-full">
                     PDF
                   </a>
+                  {inv.parentEmail ? (
+                    <button
+                      onClick={() => handleSendInvoice(inv.id, inv.status === 'sent')}
+                      disabled={sendingInvoiceId === inv.id}
+                      className="text-xs text-indigo-700 font-medium px-2.5 py-1 rounded-full border border-indigo-200 hover:bg-indigo-50 disabled:opacity-50"
+                    >
+                      {sendingInvoiceId === inv.id ? 'Sending…' : inv.status === 'sent' ? 'Resend' : 'Send'}
+                    </button>
+                  ) : (
+                    <span className="text-xs text-gray-400 px-2.5 py-1 rounded-full border border-gray-200" title="No email address on invoice">No email</span>
+                  )}
                   <button onClick={() => editingAdjustment === inv.id ? setEditingAdjustment(null) : openAdjustment(inv)}
                     className="text-xs text-blue-800 hover:text-blue-900 px-2.5 py-1 rounded-full border border-blue-200">
                     {editingAdjustment === inv.id ? 'Cancel' : 'Adjust'}
@@ -345,7 +510,7 @@ export default function InvoicingClient({
           </div>
 
           {/* Desktop table */}
-          <div className="hidden sm:block bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="hidden lg:block bg-white rounded-xl border border-gray-200 overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
@@ -393,6 +558,17 @@ export default function InvoicingClient({
                             className="text-xs bg-blue-100 text-blue-900 hover:bg-blue-200 font-medium px-2 py-0.5 rounded">
                             PDF
                           </a>
+                          {inv.parentEmail ? (
+                            <button
+                              onClick={() => handleSendInvoice(inv.id, inv.status === 'sent')}
+                              disabled={sendingInvoiceId === inv.id}
+                              className="text-xs text-indigo-700 hover:text-indigo-900 font-medium disabled:opacity-50"
+                            >
+                              {sendingInvoiceId === inv.id ? 'Sending…' : inv.status === 'sent' ? 'Resend' : 'Send'}
+                            </button>
+                          ) : (
+                            <span className="text-xs text-gray-300" title="No email on invoice">—</span>
+                          )}
                           <button onClick={() => editingAdjustment === inv.id ? setEditingAdjustment(null) : openAdjustment(inv)}
                             className="text-xs text-blue-800 hover:text-blue-900">Adjust</button>
                           {inv.status !== 'paid' ? (
@@ -444,6 +620,189 @@ export default function InvoicingClient({
           No invoices generated for this term yet. Select children above and click &ldquo;Generate invoices&rdquo;.
         </div>
       )}
+
+      {/* Reminder log */}
+      {termReminders.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100">
+            <h3 className="text-sm font-semibold text-gray-700">Reminder log</h3>
+            <p className="text-xs text-gray-400 mt-0.5">All invoice emails sent for this term</p>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {termReminders.map(r => {
+              const inv = termInvoices.find(i => i.invoice.id === r.invoiceId)
+              return (
+                <div key={r.id} className="px-4 py-2.5 flex items-center justify-between gap-3 text-sm">
+                  <div>
+                    <span className="font-medium text-gray-900">{inv ? `${inv.child.firstName} ${inv.child.lastName}` : '—'}</span>
+                    <span className="text-xs text-gray-500 ml-2">{r.email}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${r.type === 'initial' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {r.type === 'initial' ? 'Invoice sent' : 'Reminder'}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      {new Date(r.sentAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FundingClaimsPanel({
+  termInvoices,
+  sessionConfigs,
+}: {
+  termInvoices: InvoiceRow[]
+  sessionConfigs: SessionConfig[]
+}) {
+  // BCP LA base rates from April 2026 (EYSFF 2026/27)
+  const LA_RATE_34YO = 5.86
+  const LA_RATE_2YO  = 8.27
+  const EYPP_RATE    = 1.15   // per funded hour (up to 570h)
+  const DAF_ANNUAL   = 975    // per eligible child per year
+  const DEP_RATE_34  = 0.33   // deprivation supplement per hour — 3 & 4 year olds
+  const DEP_RATE_2YO = 0.65   // deprivation supplement per hour — 2 year olds
+  const SENIF_RATES: Record<string, number> = { '1': 2.43, '2': 4.86, '3': 7.49 }
+
+  // Always use BCP LA base rates for funding claims (not private session rates)
+  const rate34 = LA_RATE_34YO
+  const rate2yo = LA_RATE_2YO
+
+  // Group invoices by funding type
+  let funded34Hours = 0
+  let funded2yoHours = 0
+  let eyppHours = 0
+  let dep34Hours = 0
+  let dep2yoHours = 0
+  let dafCount = 0
+  let senTotal = 0
+  const senChildren: { name: string; tier: string | null }[] = []
+  let extendedCount = 0
+
+  for (const { invoice: inv, child } of termInvoices) {
+    const fh = parseFloat(inv.fundedHoursTotal)
+    if (fh <= 0) continue
+
+    if (child.twoYearFunding) {
+      funded2yoHours += fh
+    } else {
+      funded34Hours += fh
+    }
+    if (child.extendedHours) extendedCount++
+    if (child.eypp) eyppHours += fh
+    if (child.dep) {
+      if (child.twoYearFunding) dep2yoHours += fh
+      else dep34Hours += fh
+    }
+    if (child.daf) dafCount++
+    if (child.sen && !senChildren.find(s => s.name === `${child.firstName} ${child.lastName}`)) {
+      senChildren.push({ name: `${child.firstName} ${child.lastName}`, tier: child.senTier })
+      senTotal += fh * (SENIF_RATES[child.senTier ?? '1'] ?? 2.43)
+    }
+  }
+
+  const hasClaims = funded34Hours > 0 || funded2yoHours > 0 || eyppHours > 0 || dafCount > 0 || dep34Hours > 0 || dep2yoHours > 0 || senChildren.length > 0
+  if (!hasClaims) return null
+
+  const dafTermAmount = DAF_ANNUAL / 3
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100">
+        <h3 className="text-sm font-semibold text-gray-700">LA Funding Claims</h3>
+        <p className="text-xs text-gray-400 mt-0.5">Estimated amounts this setting can claim from the local authority for this term</p>
+      </div>
+      <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
+
+        {funded34Hours > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+            <div className="text-xs font-semibold text-blue-600 mb-1">
+              Universal 15h{extendedCount > 0 ? ` + Extended 30h` : ''}
+            </div>
+            <div className="text-lg font-bold text-blue-900">
+              £{(funded34Hours * rate34).toFixed(2)}
+            </div>
+            <div className="text-[11px] text-blue-500 mt-0.5">
+              {funded34Hours.toFixed(1)}h @ £{rate34.toFixed(2)}/h
+              {extendedCount > 0 && ` · ${extendedCount} on extended`}
+            </div>
+          </div>
+        )}
+
+        {funded2yoHours > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+            <div className="text-xs font-semibold text-blue-600 mb-1">2-Year-Old Funding</div>
+            <div className="text-lg font-bold text-blue-900">
+              £{(funded2yoHours * rate2yo).toFixed(2)}
+            </div>
+            <div className="text-[11px] text-blue-500 mt-0.5">
+              {funded2yoHours.toFixed(1)}h @ £{rate2yo.toFixed(2)}/h
+            </div>
+          </div>
+        )}
+
+        {eyppHours > 0 && (
+          <div className="bg-purple-50 border border-purple-200 rounded-xl p-3">
+            <div className="text-xs font-semibold text-purple-600 mb-1">EYPP</div>
+            <div className="text-lg font-bold text-purple-900">
+              £{(eyppHours * EYPP_RATE).toFixed(2)}
+            </div>
+            <div className="text-[11px] text-purple-500 mt-0.5">
+              {eyppHours.toFixed(1)}h × £{EYPP_RATE.toFixed(2)}
+            </div>
+          </div>
+        )}
+
+        {dafCount > 0 && (
+          <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
+            <div className="text-xs font-semibold text-orange-600 mb-1">DAF</div>
+            <div className="text-lg font-bold text-orange-900">
+              £{(dafCount * dafTermAmount).toFixed(2)}
+            </div>
+            <div className="text-[11px] text-orange-500 mt-0.5">
+              {dafCount} child{dafCount !== 1 ? 'ren' : ''} × £{dafTermAmount.toFixed(2)}/term
+            </div>
+          </div>
+        )}
+
+        {(dep34Hours > 0 || dep2yoHours > 0) && (
+          <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
+            <div className="text-xs font-semibold text-orange-600 mb-1">Deprivation Supplement</div>
+            <div className="text-lg font-bold text-orange-900">
+              £{(dep34Hours * DEP_RATE_34 + dep2yoHours * DEP_RATE_2YO).toFixed(2)}
+            </div>
+            <div className="text-[11px] text-orange-500 mt-0.5 space-y-0.5">
+              {dep34Hours > 0 && <div>{dep34Hours.toFixed(1)}h × £{DEP_RATE_34} (3–4yo)</div>}
+              {dep2yoHours > 0 && <div>{dep2yoHours.toFixed(1)}h × £{DEP_RATE_2YO} (2yo)</div>}
+            </div>
+          </div>
+        )}
+
+        {senChildren.length > 0 && (
+          <div className="bg-purple-50 border border-purple-200 rounded-xl p-3">
+            <div className="text-xs font-semibold text-purple-600 mb-1">SENIF</div>
+            <div className="text-lg font-bold text-purple-900">
+              £{senTotal.toFixed(2)}
+            </div>
+            <div className="text-[11px] text-purple-500 mt-0.5 space-y-0.5">
+              {senChildren.map((s, i) => (
+                <div key={i}>{s.name}{s.tier ? ` — Tier ${s.tier} (£${SENIF_RATES[s.tier]}/h)` : ''}</div>
+              ))}
+            </div>
+          </div>
+        )}
+
+      </div>
+      <div className="px-4 pb-3 text-[11px] text-gray-400">
+        Rates based on your session config. Check against your LA funding statement for final amounts.
+      </div>
     </div>
   )
 }

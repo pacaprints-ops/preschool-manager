@@ -18,6 +18,9 @@ import SicknessSection from './SicknessSection'
 import HolidaySection from './HolidaySection'
 import SiblingsSection from './SiblingsSection'
 import MedicineAdminSection from './MedicineAdminSection'
+import FundingSection from './FundingSection'
+import ParentSection from './ParentSection'
+import AttendanceLogSection from './AttendanceLogSection'
 
 export default async function ChildProfilePage({
   params,
@@ -70,9 +73,13 @@ export default async function ChildProfilePage({
     db.select().from(childHolidays).where(eq(childHolidays.childId, id)).orderBy(childHolidays.startDate),
     db.select({
       date: registerEntries.date,
+      sessionType: registerEntries.sessionType,
       status: registerEntries.status,
       absenceReason: registerEntries.absenceReason,
+      signedInAt: registerEntries.signedInAt,
       signedOutAt: registerEntries.signedOutAt,
+      droppedBy: registerEntries.droppedBy,
+      rule48h: registerEntries.rule48h,
     }).from(registerEntries).where(eq(registerEntries.childId, id)).orderBy(registerEntries.date),
   ])
 
@@ -93,9 +100,13 @@ export default async function ChildProfilePage({
 
   const serialisedEntries = allChildEntries.map(e => ({
     date: e.date,
+    sessionType: e.sessionType,
     status: e.status,
     absenceReason: e.absenceReason,
+    signedInAt: e.signedInAt ? e.signedInAt.toISOString() : null,
     signedOutAt: e.signedOutAt ? e.signedOutAt.toISOString() : null,
+    droppedBy: e.droppedBy,
+    rule48h: e.rule48h,
   }))
 
   const serialisedTerms = allTerms.map(t => ({
@@ -155,10 +166,35 @@ export default async function ChildProfilePage({
           enrolledDays={enrolledDays}
         />
         <ChildInfoSection child={child} staff={allStaff} defaultEditing={edit === '1'} />
-        <SiblingsSection childId={id} siblings={siblings} allChildren={allChildren} />
-        <SessionsSection childId={id} sessions={childSessionsData} />
         <ContactsSection childId={id} contacts={contacts} />
-        <MedicationsSection childId={id} medications={meds} />
+        <ParentSection
+          childId={id}
+          data={{
+            parentName: child.parentName ?? null,
+            parentEmail: child.parentEmail ?? null,
+            parentPhone: child.parentPhone ?? null,
+          }}
+        />
+        <SiblingsSection childId={id} siblings={siblings} allChildren={allChildren} />
+        <FundingSection
+          childId={id}
+          funding={{
+            twoYearFunding: child.twoYearFunding,
+            extendedHours: child.extendedHours,
+            eypp: child.eypp,
+            sen: child.sen,
+            senTier: child.senTier,
+            daf: child.daf,
+            dep: child.dep,
+          }}
+        />
+        <SessionsSection childId={id} sessions={childSessionsData} />
+        <MedicationsSection
+          childId={id}
+          medications={meds}
+          contacts={contacts}
+          child={{ firstName: child.firstName, lastName: child.lastName, dateOfBirth: child.dateOfBirth, address: child.address ?? null }}
+        />
         <MedicineAdminSection
           childId={id}
           administrations={medicineAdmins}
@@ -172,6 +208,7 @@ export default async function ChildProfilePage({
           staff={allStaff}
           child={{ firstName: child.firstName, lastName: child.lastName, dateOfBirth: child.dateOfBirth, address: child.address ?? null }}
         />
+        <AttendanceLogSection entries={serialisedEntries} />
 
         {!child.archived ? (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center justify-between">

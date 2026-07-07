@@ -19,6 +19,13 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
   const [consumableConsent, setConsumableConsent] = useState(false)
   const [needs1to1, setNeeds1to1] = useState(false)
   const [sessions, setSessions] = useState<Record<string, SessionStatus>>({})
+  const [depositPaid, setDepositPaid] = useState(false)
+  const [twoYearFunding, setTwoYearFunding] = useState(false)
+  const [extendedHours, setExtendedHours] = useState(false)
+  const [eypp, setEypp] = useState(false)
+  const [sen, setSen] = useState(false)
+  const [daf, setDaf] = useState(false)
+  const [dep, setDep] = useState(false)
 
   function toggle(day: string, session: string) {
     const key = `${day}-${session}`
@@ -52,6 +59,17 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
       photoConsent: form.get('photoConsent') === 'on',
       consumableConsent,
       needs1to1,
+      parentName: form.get('parentName') as string,
+      parentEmail: form.get('parentEmail') as string,
+      parentPhone: form.get('parentPhone') as string,
+      depositPaid,
+      twoYearFunding,
+      extendedHours,
+      eypp,
+      sen,
+      senTier: sen ? form.get('senTier') as string : undefined,
+      daf,
+      dep,
     })
 
     if (Object.keys(sessions).length > 0) {
@@ -67,25 +85,27 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
 
   return (
     <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+
+      {/* Basic info */}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">First name *</label>
-          <input name="firstName" required className={input} />
+          <input name="firstName" required className={inp} />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Last name *</label>
-          <input name="lastName" required className={input} />
+          <input name="lastName" required className={inp} />
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Date of birth *</label>
-          <input name="dateOfBirth" type="date" required className={input} />
+          <input name="dateOfBirth" type="date" required className={inp} />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Key worker</label>
-          <select name="keyWorkerId" className={input}>
+          <select name="keyWorkerId" className={inp}>
             <option value="">— Not assigned —</option>
             {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
@@ -94,12 +114,12 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-        <input name="address" className={input} />
+        <input name="address" className={inp} />
       </div>
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Collection password</label>
-        <input name="collectionPassword" className={input} placeholder="Word set by parent for collection verification" />
+        <input name="collectionPassword" className={inp} placeholder="Word set by parent for collection verification" />
       </div>
 
       {/* Sessions */}
@@ -154,7 +174,26 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
         </table>
       </div>
 
-      {/* Allergies */}
+      {/* Parent / carer */}
+      <div className="border-t border-gray-100 pt-4 space-y-3">
+        <h2 className="text-sm font-semibold text-gray-700">Parent / Carer</h2>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <input name="parentName" className={inp} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+            <input name="parentPhone" type="tel" className={inp} />
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+          <input name="parentEmail" type="email" className={inp} />
+        </div>
+      </div>
+
+      {/* Allergies + medical */}
       <div className="border-t border-gray-100 pt-4 space-y-3">
         <div className="flex items-center gap-3">
           <input type="checkbox" id="hasAllergies" checked={hasAllergies} onChange={e => setHasAllergies(e.target.checked)} className="rounded" />
@@ -163,55 +202,107 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
         {hasAllergies && (
           <div className="ml-6">
             <label className="block text-sm text-gray-600 mb-1">Allergy details</label>
-            <textarea name="allergies" rows={2} className={input} />
+            <textarea name="allergies" rows={2} className={inp} />
           </div>
         )}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Medical notes</label>
-        <textarea name="medicalNotes" rows={2} className={input} placeholder="Any conditions, additional medical information..." />
-      </div>
-
-      <div className="flex items-center gap-3">
-        <input type="checkbox" id="photoConsent" name="photoConsent" className="rounded" />
-        <label htmlFor="photoConsent" className="text-sm font-medium text-gray-700">Photo / media consent given</label>
-      </div>
-
-      <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-        <input
-          type="checkbox"
-          id="consumableConsent"
-          checked={consumableConsent}
-          onChange={e => setConsumableConsent(e.target.checked)}
-          className="rounded mt-0.5"
-        />
         <div>
-          <label htmlFor="consumableConsent" className="text-sm font-medium text-gray-700">
-            Voluntary consumable fee agreement
-          </label>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Parent/guardian agrees to the £3.50 per session consumable charge for each day attending.
-          </p>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Medical notes</label>
+          <textarea name="medicalNotes" rows={2} className={inp} placeholder="Any conditions, additional medical information..." />
         </div>
       </div>
 
-      <div className="flex items-start gap-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
-        <input
-          type="checkbox"
-          id="needs1to1"
-          checked={needs1to1}
-          onChange={e => setNeeds1to1(e.target.checked)}
-          className="rounded mt-0.5"
-        />
-        <div>
-          <label htmlFor="needs1to1" className="text-sm font-medium text-gray-700">
-            Requires 1-2-1 keyworker
-          </label>
-          <p className="text-xs text-gray-500 mt-0.5">
-            This child has a dedicated keyworker who cannot be counted in the general staff ratio.
-          </p>
+      {/* Consents */}
+      <div className="border-t border-gray-100 pt-4 space-y-3">
+        <h2 className="text-sm font-semibold text-gray-700">Consents</h2>
+        <div className="flex items-center gap-3">
+          <input type="checkbox" id="photoConsent" name="photoConsent" className="rounded" />
+          <label htmlFor="photoConsent" className="text-sm font-medium text-gray-700">Photo / media consent given</label>
         </div>
+
+        <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <input
+            type="checkbox"
+            id="consumableConsent"
+            checked={consumableConsent}
+            onChange={e => setConsumableConsent(e.target.checked)}
+            className="rounded mt-0.5"
+          />
+          <div>
+            <label htmlFor="consumableConsent" className="text-sm font-medium text-gray-700">
+              Voluntary consumable fee agreement
+            </label>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Parent/guardian agrees to the £3.50 per session consumable charge for each day attending.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+          <input
+            type="checkbox"
+            id="needs1to1"
+            checked={needs1to1}
+            onChange={e => setNeeds1to1(e.target.checked)}
+            className="rounded mt-0.5"
+          />
+          <div>
+            <label htmlFor="needs1to1" className="text-sm font-medium text-gray-700">
+              Requires 1-2-1 keyworker
+            </label>
+            <p className="text-xs text-gray-500 mt-0.5">
+              This child has a dedicated keyworker who cannot be counted in the general staff ratio.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Funding */}
+      <div className="border-t border-gray-100 pt-4 space-y-3">
+        <h2 className="text-sm font-semibold text-gray-700">Funding &amp; Fees</h2>
+
+        <div className="flex items-center gap-3">
+          <input type="checkbox" id="depositPaid" checked={depositPaid} onChange={e => setDepositPaid(e.target.checked)} className="rounded" />
+          <label htmlFor="depositPaid" className="text-sm font-medium text-gray-700">Deposit paid (£50 — deducted from first invoice)</label>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input type="checkbox" checked={twoYearFunding} onChange={e => setTwoYearFunding(e.target.checked)} className="rounded" />
+            2-year funding
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input type="checkbox" checked={extendedHours} onChange={e => setExtendedHours(e.target.checked)} className="rounded" />
+            Extended hours (30h)
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input type="checkbox" checked={eypp} onChange={e => setEypp(e.target.checked)} className="rounded" />
+            EYPP
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input type="checkbox" checked={dep} onChange={e => setDep(e.target.checked)} className="rounded" />
+            DEP (deprivation supplement)
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input type="checkbox" checked={daf} onChange={e => setDaf(e.target.checked)} className="rounded" />
+            DAF (Disability Access Fund)
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input type="checkbox" checked={sen} onChange={e => setSen(e.target.checked)} className="rounded" />
+            SEN Inclusion Fund
+          </label>
+        </div>
+
+        {sen && (
+          <div className="ml-6">
+            <label className="block text-sm text-gray-600 mb-1">SEN tier</label>
+            <select name="senTier" className={`${inp} w-40`}>
+              <option value="">— Select —</option>
+              <option value="1">Tier 1</option>
+              <option value="2">Tier 2</option>
+              <option value="3">Tier 3</option>
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-3 pt-2 border-t border-gray-100">
@@ -230,4 +321,4 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
   )
 }
 
-const input = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700'
+const inp = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700'
