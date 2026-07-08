@@ -694,11 +694,13 @@ export default function RegisterClient({
   }
 
   async function handleEndSession() {
-    // Only children who have already been manually signed out → normalise to exactly 3pm
-    // Children with no sign-out time are late pickups and must be left alone
+    // Children already signed out at/before 3pm → normalise to exactly 3pm.
+    // Genuine late pickups (signed out after 3pm) must keep their real time and late fee.
     const toUpdate = rows.filter(r => {
       const key = `${r.childId}-${r.sessionType}`
-      return statuses[key] === 'present' && !!signedOutTimes[key]
+      if (statuses[key] !== 'present' || !signedOutTimes[key]) return false
+      const isLate = minutesLateFromTime(formatSignOutTime(signedOutTimes[key]!)) > 0
+      return !isLate
     })
     const stillPresent = rows.filter(r => {
       const key = `${r.childId}-${r.sessionType}`
