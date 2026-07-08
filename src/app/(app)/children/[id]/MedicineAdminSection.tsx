@@ -27,6 +27,8 @@ export default function MedicineAdminSection({
   administrations: Admin[]
   staff: StaffMember[]
 }) {
+  const [sectionOpen, setSectionOpen] = useState(false)
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [adding, setAdding] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
@@ -65,91 +67,121 @@ export default function MedicineAdminSection({
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="flex items-center justify-between mb-4">
+      <button
+        onClick={() => setSectionOpen(o => !o)}
+        className="w-full flex items-center justify-between text-left"
+      >
         <div>
-          <h2 className="text-sm font-semibold text-gray-700">Medicine Administration Log</h2>
+          <h2 className="text-sm font-semibold text-gray-700">
+            Medicine Administration Log
+            {administrations.length > 0 && (
+              <span className="ml-1.5 font-normal text-gray-400">({administrations.length})</span>
+            )}
+          </h2>
           <p className="text-xs text-gray-400 mt-0.5">Record every time medicine is given — required by Ofsted</p>
         </div>
-        <button onClick={() => setAdding(a => !a)} className="text-xs text-blue-800 hover:text-blue-900">
-          {adding ? 'Cancel' : '+ Log administration'}
-        </button>
-      </div>
+        <span className={`text-gray-400 transition-transform shrink-0 ml-2 ${sectionOpen ? 'rotate-180' : ''}`}>▾</span>
+      </button>
 
-      {administrations.length === 0 && !adding && (
-        <p className="text-sm text-gray-400">No medicine administrations recorded.</p>
-      )}
+      {sectionOpen && (
+        <div className="mt-4 border-t border-gray-100 pt-4">
+          <div className="flex justify-end mb-3">
+            <button onClick={() => setAdding(a => !a)} className="text-xs text-blue-800 hover:text-blue-900">
+              {adding ? 'Cancel' : '+ Log administration'}
+            </button>
+          </div>
 
-      <div className="space-y-3">
-        {administrations.map(a => (
-          <div key={a.id} className="p-3 bg-blue-50 border border-blue-100 rounded-lg text-sm">
-            <div className="flex items-start justify-between">
+          {administrations.length === 0 && !adding && (
+            <p className="text-sm text-gray-400">No medicine administrations recorded.</p>
+          )}
+
+          <div className="space-y-2">
+            {administrations.map(a => {
+              const isOpen = expanded[a.id] ?? false
+              return (
+                <div key={a.id} className="bg-blue-50 border border-blue-100 rounded-lg text-sm overflow-hidden">
+                  <button
+                    onClick={() => setExpanded(e => ({ ...e, [a.id]: !isOpen }))}
+                    className="w-full flex items-center justify-between px-3 py-2 text-left"
+                  >
+                    <span className="font-medium text-gray-900">
+                      {new Date(a.givenAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {a.parentInformed && (
+                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Parent informed</span>
+                      )}
+                      <span className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}>▾</span>
+                    </div>
+                  </button>
+                  {isOpen && (
+                    <div className="px-3 pb-3">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="font-medium text-gray-900">{a.medicationName} — {a.dose}</div>
+                          <div className="text-gray-500 mt-0.5">
+                            {new Date(a.givenAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                        <button onClick={() => deleteMedicineAdmin(a.id, childId)} className="text-xs text-red-400 hover:text-red-600">Remove</button>
+                      </div>
+                      <div className="mt-1.5 text-xs text-gray-500 space-y-0.5">
+                        <div>Given by: <span className="text-gray-700 font-medium">{a.givenByName ?? '—'}</span></div>
+                        <div>Witnessed by: <span className="text-gray-700 font-medium">{a.witnessedByName ?? '—'}</span></div>
+                        {a.notes && <div className="text-gray-400 italic">{a.notes}</div>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {adding && (
+            <div className="mt-4 border-t border-gray-100 pt-4 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Medication name *</label>
+                  <input value={form.medicationName} onChange={e => setForm(f => ({ ...f, medicationName: e.target.value }))} placeholder="e.g. Calpol" className={inp} />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Dose given *</label>
+                  <input value={form.dose} onChange={e => setForm(f => ({ ...f, dose: e.target.value }))} placeholder="e.g. 5ml" className={inp} />
+                </div>
+              </div>
               <div>
-                <div className="font-medium text-gray-900">
-                  {a.medicationName} — {a.dose}
+                <label className="block text-xs text-gray-600 mb-1">Date & time given *</label>
+                <input type="datetime-local" value={form.givenAt} onChange={e => setForm(f => ({ ...f, givenAt: e.target.value }))} className={inp} />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Given by *</label>
+                  <select value={form.givenById} onChange={e => setForm(f => ({ ...f, givenById: e.target.value }))} className={inp}>
+                    <option value="">— Select staff member —</option>
+                    {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
                 </div>
-                <div className="text-gray-500 mt-0.5">
-                  {new Date(a.givenAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Witnessed by *</label>
+                  <select value={form.witnessedById} onChange={e => setForm(f => ({ ...f, witnessedById: e.target.value }))} className={inp}>
+                    <option value="">— Select staff member —</option>
+                    {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
                 </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Notes</label>
+                <input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any additional notes" className={inp} />
               </div>
               <div className="flex items-center gap-2">
-                {a.parentInformed && (
-                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Parent informed</span>
-                )}
-                <button onClick={() => deleteMedicineAdmin(a.id, childId)} className="text-xs text-red-400 hover:text-red-600">Remove</button>
+                <input type="checkbox" id="parentInformed" checked={form.parentInformed} onChange={e => setForm(f => ({ ...f, parentInformed: e.target.checked }))} className="rounded" />
+                <label htmlFor="parentInformed" className="text-sm text-gray-700">Parent / guardian informed</label>
               </div>
+              <button onClick={handleAdd} disabled={saving} className="px-4 py-2 bg-blue-800 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50">
+                {saving ? 'Saving…' : 'Save record'}
+              </button>
             </div>
-            <div className="mt-1.5 text-xs text-gray-500 space-y-0.5">
-              <div>Given by: <span className="text-gray-700 font-medium">{a.givenByName ?? '—'}</span></div>
-              <div>Witnessed by: <span className="text-gray-700 font-medium">{a.witnessedByName ?? '—'}</span></div>
-              {a.notes && <div className="text-gray-400 italic">{a.notes}</div>}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {adding && (
-        <div className="mt-4 border-t border-gray-100 pt-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">Medication name *</label>
-              <input value={form.medicationName} onChange={e => setForm(f => ({ ...f, medicationName: e.target.value }))} placeholder="e.g. Calpol" className={inp} />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">Dose given *</label>
-              <input value={form.dose} onChange={e => setForm(f => ({ ...f, dose: e.target.value }))} placeholder="e.g. 5ml" className={inp} />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-600 mb-1">Date & time given *</label>
-            <input type="datetime-local" value={form.givenAt} onChange={e => setForm(f => ({ ...f, givenAt: e.target.value }))} className={inp} />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">Given by *</label>
-              <select value={form.givenById} onChange={e => setForm(f => ({ ...f, givenById: e.target.value }))} className={inp}>
-                <option value="">— Select staff member —</option>
-                {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">Witnessed by *</label>
-              <select value={form.witnessedById} onChange={e => setForm(f => ({ ...f, witnessedById: e.target.value }))} className={inp}>
-                <option value="">— Select staff member —</option>
-                {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-600 mb-1">Notes</label>
-            <input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any additional notes" className={inp} />
-          </div>
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="parentInformed" checked={form.parentInformed} onChange={e => setForm(f => ({ ...f, parentInformed: e.target.checked }))} className="rounded" />
-            <label htmlFor="parentInformed" className="text-sm text-gray-700">Parent / guardian informed</label>
-          </div>
-          <button onClick={handleAdd} disabled={saving} className="px-4 py-2 bg-blue-800 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50">
-            {saving ? 'Saving…' : 'Save record'}
-          </button>
+          )}
         </div>
       )}
     </div>

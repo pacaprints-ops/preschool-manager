@@ -4,13 +4,14 @@ import { useState, useEffect } from 'react'
 import {
   addSickness, deleteSickness, addTraining, deleteTraining,
   updateWorkingDays, updateDBS, saveMonthlyTimesheetData, updatePersonalDetails,
-  adminResetPassword,
+  adminResetPassword, updateJobTitle,
 } from './actions'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type StaffMember = {
   id: string; name: string; email: string; role: string
+  jobTitle: string | null
   workingDays: string; dbsCertNumber: string | null
   dbsIssueDate: string | null; dbsOnUpdateService: boolean
   hasAllergies: boolean; allergies: string | null; medicalNotes: string | null
@@ -739,6 +740,10 @@ export default function StaffClient({ staff, sickness, training, hoursLog, times
   const [workingDaysMap, setWorkingDaysMap] = useState<Record<string, string>>(
     Object.fromEntries(staff.map(s => [s.id, s.workingDays]))
   )
+  const [jobTitleMap, setJobTitleMap] = useState<Record<string, string>>(
+    Object.fromEntries(staff.map(s => [s.id, s.jobTitle ?? '']))
+  )
+  const [jobTitleSaved, setJobTitleSaved] = useState<Record<string, boolean>>({})
   const [personalForm, setPersonalForm] = useState<Record<string, {
     hasAllergies: boolean; allergies: string; medicalNotes: string
     emergencyContactName: string; emergencyContactRelationship: string
@@ -985,6 +990,28 @@ export default function StaffClient({ staff, sickness, training, hoursLog, times
               setPersonalForm(f => ({ ...f, [selectedStaff]: { ...pf, ...patch } }))
             return (
               <div className="space-y-5">
+                {/* Job title */}
+                {isAdmin && (
+                  <div className="border border-gray-200 rounded-xl p-4">
+                    <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Job Title</h4>
+                    <div className="flex items-center gap-2 max-w-sm">
+                      <input
+                        value={jobTitleMap[selectedStaff] ?? ''}
+                        onChange={e => setJobTitleMap(m => ({ ...m, [selectedStaff]: e.target.value }))}
+                        onBlur={async () => {
+                          await updateJobTitle(selectedStaff, jobTitleMap[selectedStaff] ?? '')
+                          setJobTitleSaved(s => ({ ...s, [selectedStaff]: true }))
+                          setTimeout(() => setJobTitleSaved(s => ({ ...s, [selectedStaff]: false })), 1500)
+                        }}
+                        placeholder="e.g. Practitioner, Deputy Manager"
+                        className={inp}
+                      />
+                      {jobTitleSaved[selectedStaff] && <span className="text-green-600 text-xs shrink-0">✓</span>}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1.5">Used in the signature on emails this person sends to parents.</p>
+                  </div>
+                )}
+
                 {/* Allergy / medical */}
                 <div className="border border-gray-200 rounded-xl p-4 space-y-3">
                   <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Allergy &amp; Medical</h4>

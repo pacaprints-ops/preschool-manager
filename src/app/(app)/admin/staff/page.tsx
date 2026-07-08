@@ -6,6 +6,7 @@ import StaffClient from './StaffClient'
 
 const staffSelect = {
   id: users.id, name: users.name, email: users.email, role: users.role,
+  jobTitle: users.jobTitle,
   workingDays: users.workingDays,
   dbsCertNumber: users.dbsCertNumber, dbsIssueDate: users.dbsIssueDate, dbsOnUpdateService: users.dbsOnUpdateService,
   hasAllergies: users.hasAllergies, allergies: users.allergies, medicalNotes: users.medicalNotes,

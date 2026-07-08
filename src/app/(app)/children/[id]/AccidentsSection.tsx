@@ -402,6 +402,7 @@ export default function AccidentsSection({
   staff: Staff[]
   child: Child
 }) {
+  const [sectionOpen, setSectionOpen] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -453,15 +454,29 @@ export default function AccidentsSection({
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="flex items-center justify-between mb-4">
+      <button
+        onClick={() => setSectionOpen(o => !o)}
+        className="w-full flex items-center justify-between text-left"
+      >
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-gray-700">Accident Forms</h2>
+          <h2 className="text-sm font-semibold text-gray-700">
+            Accident Forms
+            {accidents.length > 0 && (
+              <span className="ml-1.5 font-normal text-gray-400">({accidents.length})</span>
+            )}
+          </h2>
           {unsignedCount > 0 && (
             <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
               {unsignedCount} unsigned
             </span>
           )}
         </div>
+        <span className={`text-gray-400 transition-transform shrink-0 ml-2 ${sectionOpen ? 'rotate-180' : ''}`}>▾</span>
+      </button>
+
+      {sectionOpen && (
+      <div className="mt-4 border-t border-gray-100 pt-4">
+      <div className="flex justify-end mb-3">
         <button
           onClick={() => { reset(); setModalOpen(true) }}
           className="text-xs text-blue-800 hover:text-blue-900"
@@ -619,6 +634,8 @@ export default function AccidentsSection({
           )
         })}
       </div>
+      </div>
+      )}
 
       {/* ── Print view ── */}
       {printForm && (

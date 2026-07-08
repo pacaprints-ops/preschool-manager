@@ -20,6 +20,10 @@ export async function updateWorkingDays(userId: string, days: string) {
   revalidatePath('/admin/staff')
 }
 
+export async function updateJobTitle(userId: string, jobTitle: string) {
+  await db.update(users).set({ jobTitle: jobTitle.trim() || null }).where(eq(users.id, userId))
+}
+
 export async function addSickness(userId: string, data: { startDate: string; endDate?: string; reason?: string; notes?: string }) {
   await db.insert(staffSickness).values({ userId, ...data, endDate: data.endDate || null, reason: data.reason || null, notes: data.notes || null })
   revalidatePath('/admin/staff')
@@ -39,12 +43,10 @@ export async function addTimesheetEntry(userId: string, data: { date: string; ti
     hoursWorked: data.hoursWorked,
     notes: data.notes || null,
   })
-  revalidatePath('/admin/staff')
 }
 
 export async function deleteTimesheetEntry(id: string) {
   await db.delete(staffHours).where(eq(staffHours.id, id))
-  revalidatePath('/admin/staff')
 }
 
 export async function saveMonthlyTimesheetData(
@@ -97,8 +99,6 @@ export async function saveMonthlyTimesheetData(
       notes: summary.notes || null,
     },
   })
-
-  revalidatePath('/admin/staff')
 }
 
 export async function addTraining(userId: string, data: { trainingName: string; completedDate: string; expiryDate?: string; notes?: string }) {

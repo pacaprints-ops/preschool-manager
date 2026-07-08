@@ -27,6 +27,7 @@ export const users = pgTable('users', {
   passwordHash: text('password_hash').notNull(),
   name: text('name').notNull(),
   role: roleEnum('role').notNull().default('staff'),
+  jobTitle: text('job_title'),
   workingDays: text('working_days').notNull().default('mon,tue,wed,thu,fri'),
   dbsCertNumber: text('dbs_cert_number'),
   dbsIssueDate: date('dbs_issue_date'),
