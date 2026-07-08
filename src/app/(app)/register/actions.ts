@@ -29,7 +29,6 @@ export async function markAttendance(input: MarkAttendanceInput) {
           eq(registerEntries.date, date)
         )
       )
-    revalidatePath('/register')
     return
   }
 
@@ -76,8 +75,6 @@ export async function markAttendance(input: MarkAttendanceInput) {
       signedInAt: status === 'present' ? new Date() : null,
     })
   }
-
-  revalidatePath('/register')
 }
 
 export async function saveDroppedBy(
@@ -96,7 +93,24 @@ export async function saveDroppedBy(
         eq(registerEntries.date, date),
       )
     )
-  revalidatePath('/register')
+}
+
+export async function savePickedUpBy(
+  childId: string,
+  sessionType: 'morning' | 'afternoon' | 'full_day',
+  date: string,
+  pickedUpBy: string,
+) {
+  await db
+    .update(registerEntries)
+    .set({ pickedUpBy: pickedUpBy.trim() || null })
+    .where(
+      and(
+        eq(registerEntries.childId, childId),
+        eq(registerEntries.sessionType, sessionType),
+        eq(registerEntries.date, date),
+      )
+    )
 }
 
 // signOutTimeLocal: "HH:MM" in local time (e.g. "14:20" or "15:05")
@@ -187,8 +201,6 @@ export async function saveRegisterNote(
       addedById: userId || null,
     })
   }
-
-  revalidatePath('/register')
 }
 
 export async function setNoteCompleted(
@@ -208,7 +220,6 @@ export async function setNoteCompleted(
         eq(registerNotes.date, date),
       )
     )
-  revalidatePath('/register')
 }
 
 export async function endSession(

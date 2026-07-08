@@ -234,6 +234,7 @@ export const registerEntries = pgTable('register_entries', {
   signedInAt: timestamp('signed_in_at'),
   signedOutAt: timestamp('signed_out_at'),
   droppedBy: text('dropped_by'),
+  pickedUpBy: text('picked_up_by'),
   rule48h: boolean('rule_48h').notNull().default(false),
   markedById: uuid('marked_by_id').references(() => users.id),
   createdAt: timestamp('created_at').notNull().defaultNow(),

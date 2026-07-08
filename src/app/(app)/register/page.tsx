@@ -97,6 +97,7 @@ export default async function RegisterPage() {
         signedInAt: entry.signedInAt ? entry.signedInAt.toISOString() : null,
         signedOutAt: entry.signedOutAt ? entry.signedOutAt.toISOString() : null,
         droppedBy: entry.droppedBy ?? null,
+        pickedUpBy: entry.pickedUpBy ?? null,
         rule48h: entry.rule48h,
       } : null,
       sessionNote: noteMap[`${child.id}-${s.sessionType}`] ?? null,

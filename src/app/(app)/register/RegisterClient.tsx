@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  markAttendance, saveRegisterNote, signOutChild, saveDroppedBy,
+  markAttendance, saveRegisterNote, signOutChild, saveDroppedBy, savePickedUpBy,
   apply48HourRule, setNoteCompleted as saveNoteCompleted, endSession,
 } from './actions'
 import {
@@ -35,6 +35,7 @@ type RegisterRow = {
     signedInAt: string | null
     signedOutAt: string | null
     droppedBy: string | null
+    pickedUpBy: string | null
     rule48h: boolean
   } | null
 }
@@ -602,6 +603,12 @@ export default function RegisterClient({
   const [droppedBySaved, setDroppedBySaved] = useState<Record<string, boolean>>({})
   const [justMarkedKey, setJustMarkedKey] = useState<string | null>(null)
   const droppedByRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const [pickedUpByValues, setPickedUpByValues] = useState<Record<string, string>>(
+    Object.fromEntries(rows.map(r => [`${r.childId}-${r.sessionType}`, r.existing?.pickedUpBy ?? '']))
+  )
+  const [pickedUpBySaved, setPickedUpBySaved] = useState<Record<string, boolean>>({})
+  const [justSignedOutKey, setJustSignedOutKey] = useState<string | null>(null)
+  const pickedUpByRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const [is48h, setIs48h] = useState<Record<string, boolean>>({})
   const [savingAbsence, setSavingAbsence] = useState<Record<string, boolean>>({})
   const [signingOut, setSigningOut] = useState<Record<string, boolean>>({})
@@ -666,8 +673,24 @@ export default function RegisterClient({
     const timeStr = localTimeNow()
     setSigningOut(s => ({ ...s, [key]: true }))
     setSignedOutTimes(t => ({ ...t, [key]: timeStr }))
+    setJustSignedOutKey(key)
     await signOutChild(childId, sessionType, todayStr, timeStr)
     setSigningOut(s => ({ ...s, [key]: false }))
+  }
+
+  // When a child is freshly signed out, jump straight into the
+  // "who picked up" field so staff don't need an extra click
+  useEffect(() => {
+    if (justSignedOutKey) {
+      pickedUpByRefs.current[justSignedOutKey]?.focus()
+      setJustSignedOutKey(null)
+    }
+  }, [justSignedOutKey])
+
+  async function handleSavePickedUpBy(childId: string, sessionType: 'morning' | 'afternoon' | 'full_day', key: string) {
+    await savePickedUpBy(childId, sessionType, todayStr, pickedUpByValues[key] ?? '')
+    setPickedUpBySaved(v => ({ ...v, [key]: true }))
+    setTimeout(() => setPickedUpBySaved(v => ({ ...v, [key]: false })), 1500)
   }
 
   async function handleEndSession() {
@@ -904,6 +927,19 @@ export default function RegisterClient({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-medium text-gray-900 text-sm">{row.firstName} {row.lastName}</span>
+                      <button
+                        onClick={() => setShowNote(s => ({ ...s, [key]: !noteOpen }))}
+                        title="Session note"
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium border transition-colors ${
+                          noteOpen
+                            ? 'bg-indigo-600 border-indigo-600 text-white'
+                            : hasNote
+                              ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                              : 'border-gray-300 text-gray-400 hover:border-indigo-300 hover:text-indigo-600'
+                        }`}
+                      >
+                        📋 Note
+                      </button>
                       {birthdayThisWeek(row.dateOfBirth, todayStr) && (
                         <span className="text-xs bg-pink-100 text-pink-700 px-1.5 py-0.5 rounded-full font-medium">🎂 Birthday</span>
                       )}
@@ -956,20 +992,6 @@ export default function RegisterClient({
                     </div>
                   )}
 
-                  {/* Note button */}
-                  <button
-                    onClick={() => setShowNote(s => ({ ...s, [key]: !noteOpen }))}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${
-                      noteOpen
-                        ? 'bg-indigo-600 border-indigo-600 text-white'
-                        : hasNote
-                          ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
-                          : 'border-gray-300 text-gray-500 hover:border-indigo-300 hover:text-indigo-600'
-                    }`}
-                  >
-                    Note
-                  </button>
-
                   {/* Present button — hidden when absent */}
                   {status !== 'absent' && (
                     <button
@@ -1003,13 +1025,28 @@ export default function RegisterClient({
                   {/* Sign out — present only */}
                   {status === 'present' && (
                     signedOutDisplay ? (
-                      <div className="flex items-center gap-1 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5 whitespace-nowrap flex-wrap">
                         <span className="text-xs text-gray-500">Out: <span className="font-medium text-gray-700">{signedOutDisplay}</span></span>
                         {lateMinutes > 0 && (
                           <span className="text-xs bg-red-100 text-red-700 font-medium px-1.5 py-0.5 rounded-full">
                             +{lateMinutes}min £{lateMinutes.toFixed(2)}
                           </span>
                         )}
+                        <div className="flex items-center gap-1">
+                          <input
+                            ref={el => { pickedUpByRefs.current[key] = el }}
+                            type="text"
+                            value={pickedUpByValues[key] ?? ''}
+                            onChange={e => setPickedUpByValues(v => ({ ...v, [key]: e.target.value }))}
+                            onBlur={() => handleSavePickedUpBy(row.childId, row.sessionType, key)}
+                            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                            placeholder="Who picked up?"
+                            className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-green-300 w-32 min-w-0"
+                          />
+                          {pickedUpBySaved[key] && (
+                            <span className="text-green-600 text-xs shrink-0">✓</span>
+                          )}
+                        </div>
                       </div>
                     ) : (
                       <button
