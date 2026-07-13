@@ -1,5 +1,5 @@
 import { db } from '@/lib/db'
-import { parentMessages, children } from '@/lib/db/schema'
+import { parentMessages, children, users, messageTemplates } from '@/lib/db/schema'
 import { eq, desc } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
@@ -20,6 +20,19 @@ export default async function MessagingPage() {
     .where(eq(children.archived, false))
 
   const parentCount = activeChildren.filter(c => c.parentEmail).length
+
+  const allStaffRaw = await db
+    .select({ id: users.id, name: users.name, jobTitle: users.jobTitle })
+    .from(users)
+    .orderBy(users.name)
+  const seenNames = new Set<string>()
+  const staff = allStaffRaw.filter(s => {
+    if (seenNames.has(s.name)) return false
+    seenNames.add(s.name)
+    return true
+  })
+
+  const templates = await db.select().from(messageTemplates).orderBy(messageTemplates.name)
 
   const serialised = allMessages.map(m => ({
     id: m.id,
@@ -43,7 +56,7 @@ export default async function MessagingPage() {
       <p className="text-sm text-gray-500 mb-6">
         Send messages to parents. Each parent receives a separate email — no one can see other addresses.
       </p>
-      <MessagingClient messages={serialised} parentCount={parentCount} childList={childList} />
+      <MessagingClient messages={serialised} parentCount={parentCount} childList={childList} staff={staff} templates={templates} />
     </div>
   )
 }

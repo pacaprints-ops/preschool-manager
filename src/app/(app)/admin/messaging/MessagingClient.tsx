@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { sendParentMessage } from './actions'
+import { sendParentMessage, addTemplate, deleteTemplate } from './actions'
 
 type Message = {
   id: string
@@ -14,6 +14,8 @@ type Message = {
 }
 
 type ChildItem = { id: string; name: string; hasEmail: boolean }
+type StaffMember = { id: string; name: string; jobTitle: string | null }
+type Template = { id: string; name: string; subject: string; body: string }
 
 const FILTER_LABELS: Record<string, string> = {
   all: 'All parents',
@@ -42,14 +44,31 @@ function filterLabel(filterType: string, childList: ChildItem[]): string {
   return FILTER_LABELS[filterType] ?? filterType
 }
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      // strip the "data:application/pdf;base64," prefix — Resend wants raw base64
+      resolve(result.split(',')[1] ?? '')
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
 export default function MessagingClient({
   messages,
   parentCount,
   childList,
+  staff,
+  templates,
 }: {
   messages: Message[]
   parentCount: number
   childList: ChildItem[]
+  staff: StaffMember[]
+  templates: Template[]
 }) {
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
@@ -62,23 +81,57 @@ export default function MessagingClient({
   const [expanded, setExpanded] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
+  const [selectedTemplateId, setSelectedTemplateId] = useState('')
+  const [savingTemplate, setSavingTemplate] = useState(false)
+  const [newTemplateName, setNewTemplateName] = useState('')
+  const [localTemplates, setLocalTemplates] = useState(templates)
+  const [sentByUserId, setSentByUserId] = useState('')
+
   const filteredChildren = childList.filter(c =>
     c.name.toLowerCase().includes(childSearch.toLowerCase())
   )
 
   const selectedChild = childList.find(c => c.id === selectedChildId)
 
-  const canSend = subject.trim() && body.trim() &&
+  const canSend = subject.trim() && body.trim() && !!sentByUserId &&
     (filterType !== 'single_child' || !!selectedChildId)
+
+  function applyTemplate(id: string) {
+    setSelectedTemplateId(id)
+    const t = localTemplates.find(t => t.id === id)
+    if (t) {
+      setSubject(t.subject)
+      setBody(t.body)
+    }
+  }
+
+  async function handleSaveTemplate() {
+    if (!newTemplateName.trim() || !subject.trim() || !body.trim()) return
+    setSavingTemplate(true)
+    const t = await addTemplate(newTemplateName.trim(), subject, body)
+    setLocalTemplates(ts => [...ts, t].sort((a, b) => a.name.localeCompare(b.name)))
+    setNewTemplateName('')
+    setSavingTemplate(false)
+  }
+
+  async function handleDeleteTemplate(id: string) {
+    if (!confirm('Delete this template?')) return
+    setLocalTemplates(ts => ts.filter(t => t.id !== id))
+    if (selectedTemplateId === id) setSelectedTemplateId('')
+    await deleteTemplate(id)
+  }
 
   async function handleSend() {
     if (!canSend) return
     setSending(true)
+    const attachment = pdfFile ? { filename: pdfFile.name, contentBase64: await fileToBase64(pdfFile) } : undefined
     const result = await sendParentMessage({
       subject,
       body,
       filterType,
       childId: filterType === 'single_child' ? selectedChildId ?? undefined : undefined,
+      sentByUserId,
+      attachment,
     })
     setSending(false)
     setSent({ count: result.count })
@@ -87,6 +140,7 @@ export default function MessagingClient({
     setPdfFile(null)
     setChildSearch('')
     setSelectedChildId(null)
+    setSelectedTemplateId('')
     if (fileRef.current) fileRef.current.value = ''
   }
 
@@ -173,6 +227,46 @@ export default function MessagingClient({
             </div>
           )}
 
+          {/* Template */}
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Template</label>
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedTemplateId}
+                onChange={e => applyTemplate(e.target.value)}
+                className={input}
+              >
+                <option value="">— None, write from scratch —</option>
+                {localTemplates.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+              {selectedTemplateId && (
+                <button
+                  onClick={() => handleDeleteTemplate(selectedTemplateId)}
+                  className="text-xs text-red-400 hover:text-red-600 shrink-0"
+                >
+                  Delete
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <input
+                value={newTemplateName}
+                onChange={e => setNewTemplateName(e.target.value)}
+                placeholder="Save current subject + message as a new template…"
+                className={`${input} text-xs`}
+              />
+              <button
+                onClick={handleSaveTemplate}
+                disabled={savingTemplate || !newTemplateName.trim() || !subject.trim() || !body.trim()}
+                className="text-xs text-blue-800 hover:text-blue-900 font-medium disabled:opacity-40 shrink-0 whitespace-nowrap"
+              >
+                {savingTemplate ? 'Saving…' : '+ Add template'}
+              </button>
+            </div>
+          </div>
+
           {/* Subject */}
           <div>
             <label className="block text-xs text-gray-600 mb-1">Subject</label>
@@ -215,6 +309,20 @@ export default function MessagingClient({
             {pdfFile && (
               <p className="text-xs text-green-700 mt-1">📎 {pdfFile.name} selected</p>
             )}
+          </div>
+
+          {/* Sent by */}
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Sent by *</label>
+            <select
+              value={sentByUserId}
+              onChange={e => setSentByUserId(e.target.value)}
+              className={input}
+            >
+              <option value="">— Select who's sending —</option>
+              {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <p className="text-xs text-gray-400 mt-1">Added to the email signature and the sent-messages log below.</p>
           </div>
 
           <div className="flex items-center justify-between pt-1">

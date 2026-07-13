@@ -500,6 +500,16 @@ export const parentMessages = pgTable('parent_messages', {
   filterType: text('filter_type').notNull().default('all'), // 'all' | 'morning' | 'afternoon' | 'full_day'
 })
 
+// ─── Message templates ────────────────────────────────────────────────────────
+
+export const messageTemplates = pgTable('message_templates', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  subject: text('subject').notNull(),
+  body: text('body').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
 // ─── Invoice reminders log ────────────────────────────────────────────────────
 
 export const invoiceReminders = pgTable('invoice_reminders', {

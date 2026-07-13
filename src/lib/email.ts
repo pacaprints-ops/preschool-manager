@@ -8,12 +8,18 @@ function getResend() {
 
 const FROM = 'Winton Pre-School <noreply@wintonpreschool.org.uk>'
 
-export async function sendEmail(to: string | string[], subject: string, html: string) {
+export async function sendEmail(
+  to: string | string[],
+  subject: string,
+  html: string,
+  attachment?: { filename: string; contentBase64: string },
+) {
   const { error } = await getResend().emails.send({
     from: FROM,
     to: Array.isArray(to) ? to : [to],
     subject,
     html,
+    attachments: attachment ? [{ filename: attachment.filename, content: attachment.contentBase64 }] : undefined,
   })
   if (error) throw new Error(error.message)
 }
@@ -162,15 +168,29 @@ export function buildLateFeeEmail(data: LateFeeEmailData): string {
 
 // ─── Parent message email ──────────────────────────────────────────────────────
 
-export function buildParentMessageEmail(subject: string, body: string): string {
+export function buildParentMessageEmail(
+  subject: string,
+  body: string,
+  sender?: { name: string; jobTitle: string | null },
+): string {
   const paragraphs = body
     .split('\n')
     .filter(l => l.trim())
     .map(l => `<p style="color:#374151;font-size:14px;margin:0 0 12px">${l}</p>`)
     .join('')
 
+  const signature = sender ? `
+    <p style="color:#374151;font-size:14px;margin:24px 0 0;padding-top:16px;border-top:1px solid #f3f4f6">
+      Kind regards,<br>
+      <strong>${sender.name}</strong>${sender.jobTitle ? `<br>${sender.jobTitle}` : ''}<br>
+      Winton Pre-School Little Explorers<br>
+      07305 240440
+    </p>
+  ` : ''
+
   return layout(`
     <h1 style="margin:0 0 20px;font-size:20px;color:#020e2f">${subject}</h1>
     ${paragraphs}
+    ${signature}
   `)
 }

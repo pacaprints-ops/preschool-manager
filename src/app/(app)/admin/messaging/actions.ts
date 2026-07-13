@@ -1,10 +1,9 @@
 'use server'
 
 import { db } from '@/lib/db'
-import { parentMessages, children, childSessions } from '@/lib/db/schema'
+import { parentMessages, children, childSessions, users, messageTemplates } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
-import { auth } from '@/lib/auth'
 import { sendEmail, buildParentMessageEmail } from '@/lib/email'
 
 export async function sendParentMessage(data: {
@@ -12,9 +11,11 @@ export async function sendParentMessage(data: {
   body: string
   filterType: 'all' | 'morning' | 'afternoon' | 'full_day' | 'single_child' | `day:${string}`
   childId?: string
+  sentByUserId: string
+  attachment?: { filename: string; contentBase64: string }
 }) {
-  const session = await auth()
-  const senderName = session?.user?.name ?? 'Staff'
+  const [sender] = await db.select().from(users).where(eq(users.id, data.sentByUserId)).limit(1)
+  const senderName = sender?.name ?? 'Staff'
 
   const activeChildren = await db
     .select({ id: children.id, parentEmail: children.parentEmail, firstName: children.firstName, lastName: children.lastName })
@@ -44,10 +45,10 @@ export async function sendParentMessage(data: {
 
   const emails = [...new Set(eligible.map(c => c.parentEmail!))]
 
-  const html = buildParentMessageEmail(data.subject, data.body)
+  const html = buildParentMessageEmail(data.subject, data.body, sender ? { name: sender.name, jobTitle: sender.jobTitle } : undefined)
   let status = 'sent'
   try {
-    if (emails.length > 0) await sendEmail(emails, data.subject, html)
+    if (emails.length > 0) await sendEmail(emails, data.subject, html, data.attachment)
   } catch {
     status = 'failed'
   }
@@ -67,4 +68,15 @@ export async function sendParentMessage(data: {
 
   revalidatePath('/admin/messaging')
   return { count: emails.length, emails }
+}
+
+export async function addTemplate(name: string, subject: string, body: string) {
+  const [template] = await db.insert(messageTemplates).values({ name, subject, body }).returning()
+  revalidatePath('/admin/messaging')
+  return template
+}
+
+export async function deleteTemplate(id: string) {
+  await db.delete(messageTemplates).where(eq(messageTemplates.id, id))
+  revalidatePath('/admin/messaging')
 }
