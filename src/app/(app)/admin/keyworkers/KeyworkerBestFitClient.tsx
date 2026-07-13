@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { confirmKeyworker } from './actions'
 
 const SHORT_TO_FULL: Record<string, string> = {
   mon: 'monday',
@@ -46,8 +47,19 @@ type RankedStaff = StaffMember & {
 
 export default function KeyworkerBestFitClient({ staff, unassigned }: Props) {
   const [selectedChildId, setSelectedChildId] = useState<string>('')
+  const [confirming, setConfirming] = useState<string | null>(null)
+  const [justConfirmed, setJustConfirmed] = useState<string | null>(null)
 
   const selectedChild = unassigned.find(c => c.id === selectedChildId) ?? null
+
+  async function handleConfirm(staffId: string) {
+    if (!selectedChild) return
+    setConfirming(staffId)
+    await confirmKeyworker(selectedChild.id, selectedChild.type, staffId)
+    setConfirming(null)
+    setJustConfirmed(selectedChild.id)
+    setSelectedChildId('')
+  }
 
   const ranked: RankedStaff[] = staff
     .map(s => {
@@ -90,6 +102,13 @@ export default function KeyworkerBestFitClient({ staff, unassigned }: Props) {
           ))}
         </select>
       </div>
+
+      {justConfirmed && !hasSelection && (
+        <div className="mx-4 mb-3 px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-xs text-green-700 flex items-center justify-between">
+          <span>✓ Key worker confirmed</span>
+          <button onClick={() => setJustConfirmed(null)} className="text-green-500 hover:text-green-700">Dismiss</button>
+        </div>
+      )}
 
       {!hasSelection ? (
         <div className="px-4 pb-4 text-xs text-gray-400 italic">
@@ -163,6 +182,13 @@ export default function KeyworkerBestFitClient({ staff, unassigned }: Props) {
                   <span className="text-xs text-gray-400 whitespace-nowrap">
                     {s.currentChildCount} child{s.currentChildCount !== 1 ? 'ren' : ''}
                   </span>
+                  <button
+                    onClick={() => handleConfirm(s.id)}
+                    disabled={confirming !== null}
+                    className="text-xs font-medium px-2.5 py-1 rounded-lg bg-[#020e2f] text-white hover:bg-[#010922] disabled:opacity-40 whitespace-nowrap"
+                  >
+                    {confirming === s.id ? 'Confirming…' : 'Confirm'}
+                  </button>
                 </div>
               </div>
             )
