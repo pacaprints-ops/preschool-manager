@@ -1,21 +1,31 @@
 'use client'
 
 import { useState } from 'react'
-import { addTerm, deleteTerm, updateSessionRates } from './actions'
+import { addTerm, updateTerm, deleteTerm, updateSessionRates, addBankHoliday, deleteBankHoliday } from './actions'
 
 type Term = { id: string; name: string; academicYear: string; startDate: string; endDate: string; weekCount: number }
 type SessionConf = { id: string; type: string; label: string; startTime: string; endTime: string; hours: string; hourlyRate2yo: string; hourlyRate34yo: string; contribution: string }
+type BankHoliday = { id: string; date: string; name: string }
 
 const input = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700'
 
-export default function TermsClient({ terms, sessions }: { terms: Term[]; sessions: SessionConf[] }) {
+function blankTermForm() {
+  return { name: '', academicYear: '', startDate: '', endDate: '', weekCount: '' }
+}
+
+export default function TermsClient({ terms, sessions, bankHolidays }: { terms: Term[]; sessions: SessionConf[]; bankHolidays: BankHoliday[] }) {
   const [addingTerm, setAddingTerm] = useState(false)
+  const [editingTermId, setEditingTermId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [editingSession, setEditingSession] = useState<string | null>(null)
   const [sessionRates, setSessionRates] = useState<Record<string, { hourlyRate2yo: string; hourlyRate34yo: string; contribution: string }>>(
     Object.fromEntries(sessions.map(s => [s.id, { hourlyRate2yo: s.hourlyRate2yo, hourlyRate34yo: s.hourlyRate34yo, contribution: s.contribution }]))
   )
-  const [termForm, setTermForm] = useState({ name: '', academicYear: '', startDate: '', endDate: '', weekCount: '' })
+  const [termForm, setTermForm] = useState(blankTermForm())
+
+  const [addingHoliday, setAddingHoliday] = useState(false)
+  const [holidayForm, setHolidayForm] = useState({ date: '', name: '' })
+  const [savingHoliday, setSavingHoliday] = useState(false)
 
   function calcWeeks(start: string, end: string): string {
     if (!start || !end) return ''
@@ -34,9 +44,23 @@ export default function TermsClient({ terms, sessions }: { terms: Term[]; sessio
     if (!termForm.name || !termForm.startDate || !termForm.endDate || !termForm.weekCount) return
     setSaving(true)
     await addTerm({ ...termForm, weekCount: parseInt(termForm.weekCount) })
-    setTermForm({ name: '', academicYear: '', startDate: '', endDate: '', weekCount: '' })
+    setTermForm(blankTermForm())
     setSaving(false)
     setAddingTerm(false)
+  }
+
+  function startEditTerm(t: Term) {
+    setEditingTermId(t.id)
+    setTermForm({ name: t.name, academicYear: t.academicYear, startDate: t.startDate, endDate: t.endDate, weekCount: String(t.weekCount) })
+  }
+
+  async function handleSaveEditTerm(id: string) {
+    if (!termForm.name || !termForm.startDate || !termForm.endDate || !termForm.weekCount) return
+    setSaving(true)
+    await updateTerm(id, { ...termForm, weekCount: parseInt(termForm.weekCount) })
+    setSaving(false)
+    setEditingTermId(null)
+    setTermForm(blankTermForm())
   }
 
   async function handleSaveSession(id: string) {
@@ -44,6 +68,22 @@ export default function TermsClient({ terms, sessions }: { terms: Term[]; sessio
     await updateSessionRates(id, hourlyRate2yo, hourlyRate34yo, contribution)
     setEditingSession(null)
   }
+
+  async function handleAddHoliday() {
+    if (!holidayForm.date || !holidayForm.name) return
+    setSavingHoliday(true)
+    await addBankHoliday(holidayForm.date, holidayForm.name)
+    setHolidayForm({ date: '', name: '' })
+    setSavingHoliday(false)
+    setAddingHoliday(false)
+  }
+
+  const holidaysByYear = bankHolidays.reduce<Record<string, BankHoliday[]>>((acc, h) => {
+    const year = h.date.slice(0, 4)
+    if (!acc[year]) acc[year] = []
+    acc[year].push(h)
+    return acc
+  }, {})
 
   return (
     <div className="space-y-6">
@@ -113,7 +153,7 @@ export default function TermsClient({ terms, sessions }: { terms: Term[]; sessio
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-gray-700">Academic Terms</h2>
-          <button onClick={() => setAddingTerm(a => !a)} className="text-xs text-blue-800 hover:text-blue-900">
+          <button onClick={() => { setAddingTerm(a => !a); setEditingTermId(null); setTermForm(blankTermForm()) }} className="text-xs text-blue-800 hover:text-blue-900">
             {addingTerm ? 'Cancel' : '+ Add term'}
           </button>
         </div>
@@ -124,20 +164,56 @@ export default function TermsClient({ terms, sessions }: { terms: Term[]; sessio
 
         <div className="space-y-2 mb-4">
           {terms.map(t => (
-            <div key={t.id} className="flex items-start sm:items-center justify-between gap-2 p-3 bg-gray-50 rounded-lg text-sm flex-wrap">
-              <div>
-                <span className="font-medium text-gray-900">{t.name}</span>
-                <span className="text-gray-500 ml-2">{t.academicYear}</span>
-                <div className="text-xs text-gray-500 mt-0.5 sm:hidden">
-                  {new Date(t.startDate + 'T12:00:00').toLocaleDateString('en-GB')} – {new Date(t.endDate + 'T12:00:00').toLocaleDateString('en-GB')} · {t.weekCount} wks
+            editingTermId === t.id ? (
+              <div key={t.id} className="p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Term name *</label>
+                    <input value={termForm.name} onChange={e => setTermForm(f => ({ ...f, name: e.target.value }))} className={input} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Academic year *</label>
+                    <input value={termForm.academicYear} onChange={e => setTermForm(f => ({ ...f, academicYear: e.target.value }))} className={input} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Start date *</label>
+                    <input type="date" value={termForm.startDate} onChange={e => handleDateChange('startDate', e.target.value)} className={input} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">End date *</label>
+                    <input type="date" value={termForm.endDate} onChange={e => handleDateChange('endDate', e.target.value)} className={input} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Weeks *</label>
+                    <input type="number" value={termForm.weekCount} onChange={e => setTermForm(f => ({ ...f, weekCount: e.target.value }))} className={input} />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => handleSaveEditTerm(t.id)} disabled={saving} className="text-xs bg-blue-800 text-white px-3 py-1.5 rounded hover:bg-blue-900 disabled:opacity-50">
+                    {saving ? 'Saving…' : 'Save'}
+                  </button>
+                  <button onClick={() => { setEditingTermId(null); setTermForm(blankTermForm()) }} className="text-xs text-gray-500 px-3 py-1.5 rounded border border-gray-300">Cancel</button>
                 </div>
               </div>
-              <div className="flex items-center gap-4 text-gray-600">
-                <span className="hidden sm:inline">{new Date(t.startDate + 'T12:00:00').toLocaleDateString('en-GB')} – {new Date(t.endDate + 'T12:00:00').toLocaleDateString('en-GB')}</span>
-                <span className="hidden sm:inline">{t.weekCount} weeks</span>
-                <button onClick={() => deleteTerm(t.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
+            ) : (
+              <div key={t.id} className="flex items-start sm:items-center justify-between gap-2 p-3 bg-gray-50 rounded-lg text-sm flex-wrap">
+                <div>
+                  <span className="font-medium text-gray-900">{t.name}</span>
+                  <span className="text-gray-500 ml-2">{t.academicYear}</span>
+                  <div className="text-xs text-gray-500 mt-0.5 sm:hidden">
+                    {new Date(t.startDate + 'T12:00:00').toLocaleDateString('en-GB')} – {new Date(t.endDate + 'T12:00:00').toLocaleDateString('en-GB')} · {t.weekCount} wks
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 text-gray-600">
+                  <span className="hidden sm:inline">{new Date(t.startDate + 'T12:00:00').toLocaleDateString('en-GB')} – {new Date(t.endDate + 'T12:00:00').toLocaleDateString('en-GB')}</span>
+                  <span className="hidden sm:inline">{t.weekCount} weeks</span>
+                  <button onClick={() => { startEditTerm(t); setAddingTerm(false) }} className="text-xs text-blue-800 hover:text-blue-900">Edit</button>
+                  <button onClick={() => deleteTerm(t.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
+                </div>
               </div>
-            </div>
+            )
           ))}
         </div>
 
@@ -169,6 +245,60 @@ export default function TermsClient({ terms, sessions }: { terms: Term[]; sessio
             </div>
             <button onClick={handleAddTerm} disabled={saving} className="px-4 py-2 bg-blue-800 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50">
               {saving ? 'Saving…' : 'Add term'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Bank holidays */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-700">Bank Holidays</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Days the setting is closed — deducted from consumable fees on invoices</p>
+          </div>
+          <button onClick={() => setAddingHoliday(a => !a)} className="text-xs text-blue-800 hover:text-blue-900">
+            {addingHoliday ? 'Cancel' : '+ Add holiday'}
+          </button>
+        </div>
+
+        {bankHolidays.length === 0 && !addingHoliday && (
+          <p className="text-sm text-gray-400">No bank holidays added yet.</p>
+        )}
+
+        <div className="space-y-4">
+          {Object.entries(holidaysByYear).map(([year, list]) => (
+            <div key={year}>
+              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">{year}</div>
+              <div className="space-y-1.5">
+                {list.map(h => (
+                  <div key={h.id} className="flex items-center justify-between gap-2 px-3 py-1.5 bg-gray-50 rounded-lg text-sm">
+                    <span className="text-gray-900">{h.name}</span>
+                    <div className="flex items-center gap-3 text-gray-500">
+                      <span>{new Date(h.date + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+                      <button onClick={() => deleteBankHoliday(h.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {addingHoliday && (
+          <div className="border-t border-gray-100 mt-4 pt-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Date *</label>
+                <input type="date" value={holidayForm.date} onChange={e => setHolidayForm(f => ({ ...f, date: e.target.value }))} className={input} />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Name *</label>
+                <input value={holidayForm.name} onChange={e => setHolidayForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Christmas Day" className={input} />
+              </div>
+            </div>
+            <button onClick={handleAddHoliday} disabled={savingHoliday} className="px-4 py-2 bg-blue-800 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50">
+              {savingHoliday ? 'Saving…' : 'Add holiday'}
             </button>
           </div>
         )}

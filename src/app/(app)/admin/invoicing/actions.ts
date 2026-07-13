@@ -43,6 +43,10 @@ export async function generateInvoices(termId: string, selectedChildIds?: string
     ? Object.values(childMap).filter(({ child }) => selectedChildIds.includes(child.id))
     : Object.values(childMap)
 
+  // Bank holidays: pre-school closed, no consumable fee charged those days.
+  // Same for every child in this term, so compute once outside the loop.
+  const bankHolidayCount = await countBankHolidaysInTerm(term[0].startDate, term[0].endDate)
+
   let created = 0
   for (const { child, sessions: childSess } of toInvoice) {
     const existing = await db.select().from(invoices).where(
@@ -94,8 +98,6 @@ export async function generateInvoices(termId: string, selectedChildIds?: string
     const fundedValue = fundedValuePerWeek * weeks
     const fundedHoursTotal = fundedHoursPerWeek * weeks
 
-    // Bank holidays: pre-school closed, no consumable fee charged those days
-    const bankHolidayCount = countBankHolidaysInTerm(term[0].startDate, term[0].endDate)
     const bankHolidayDeduction = child.consumableConsent ? bankHolidayCount * contribution : 0
 
     // Deposit credit: £50 returned on first ever invoice if deposit was paid

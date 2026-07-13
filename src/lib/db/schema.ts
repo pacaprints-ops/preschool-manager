@@ -58,6 +58,15 @@ export const terms = pgTable('terms', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
+// ─── Bank holidays ────────────────────────────────────────────────────────────
+
+export const bankHolidays = pgTable('bank_holidays', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  date: date('date').notNull().unique(),
+  name: text('name').notNull(), // e.g. "Good Friday"
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
 // ─── Sessions config ──────────────────────────────────────────────────────────
 
 export const sessionConfig = pgTable('session_config', {
