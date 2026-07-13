@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   markAttendance, saveRegisterNote, signOutChild, saveDroppedBy, savePickedUpBy,
-  apply48HourRule, setNoteCompleted as saveNoteCompleted, endSession,
+  apply48HourRule, setNoteCompleted as saveNoteCompleted, endSession, addExtraSession,
 } from './actions'
 import {
   signInStaffForDay, updateStaffSignOut,
@@ -24,6 +24,7 @@ type RegisterRow = {
   allergies: string | null
   medicalNotes: string | null
   onHoliday: boolean
+  isExtraSession: boolean
   sessionNote: { note: string; completed: boolean; completedByName: string | null } | null
   hasUnsignedAccident: boolean
   existing: {
@@ -99,6 +100,114 @@ function fmtTime(iso: string | null): string | null {
 function localTimeNow(): string {
   const now = new Date()
   return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+}
+
+// ─── Add Extra Session Modal ───────────────────────────────────────────────────
+
+function AddExtraSessionModal({ candidates, todayStr, onClose, onAdded }: {
+  candidates: { id: string; firstName: string; lastName: string }[]
+  todayStr: string
+  onClose: () => void
+  onAdded: () => void
+}) {
+  const [search, setSearch] = useState('')
+  const [childId, setChildId] = useState<string | null>(null)
+  const [sessionType, setSessionType] = useState<'morning' | 'afternoon' | 'full_day'>('full_day')
+  const [isFunded, setIsFunded] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const filtered = candidates.filter(c =>
+    `${c.firstName} ${c.lastName}`.toLowerCase().includes(search.toLowerCase())
+  )
+  const selected = candidates.find(c => c.id === childId)
+
+  async function handleSubmit() {
+    if (!childId) return
+    setSaving(true)
+    await addExtraSession(childId, todayStr, sessionType, isFunded)
+    setSaving(false)
+    onAdded()
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+        <div className="p-5 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-800">Add extra day</h2>
+          <p className="text-sm text-gray-500 mt-0.5">For a child attending today outside their usual schedule</p>
+        </div>
+        <div className="p-5 space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Child</label>
+            {selected ? (
+              <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                <span className="text-sm font-medium text-gray-900">{selected.firstName} {selected.lastName}</span>
+                <button onClick={() => { setChildId(null); setSearch('') }} className="text-xs text-gray-400 hover:text-gray-600">Change</button>
+              </div>
+            ) : (
+              <>
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search child name…"
+                  autoFocus
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-purple-400"
+                />
+                {search.length > 0 && (
+                  <div className="max-h-40 overflow-y-auto divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white mt-1">
+                    {filtered.length === 0 ? (
+                      <div className="px-3 py-2 text-sm text-gray-400">No children found</div>
+                    ) : filtered.map(c => (
+                      <button key={c.id} type="button"
+                        onClick={() => { setChildId(c.id); setSearch('') }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-purple-50 text-gray-900">
+                        {c.firstName} {c.lastName}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Session</label>
+            <div className="flex gap-2">
+              {(['morning', 'afternoon', 'full_day'] as const).map(st => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setSessionType(st)}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    sessionType === st ? 'bg-purple-700 text-white border-purple-700' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {SESSION_LABELS[st]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input type="checkbox" checked={isFunded} onChange={e => setIsFunded(e.target.checked)} className="rounded" />
+            Funded (not charged) — otherwise billed as a one-off paid session
+          </label>
+        </div>
+        <div className="p-5 border-t border-gray-100 flex gap-2">
+          <button
+            onClick={handleSubmit}
+            disabled={!childId || saving}
+            className="flex-1 py-2.5 bg-purple-700 text-white text-sm font-semibold rounded-xl hover:bg-purple-800 disabled:opacity-50 transition-colors"
+          >
+            {saving ? 'Adding…' : 'Add to today’s register'}
+          </button>
+          <button onClick={onClose} className="px-4 py-2.5 text-sm text-gray-600 border border-gray-300 rounded-xl hover:bg-gray-50">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ─── Staff Sign-In Modal ───────────────────────────────────────────────────────
@@ -549,6 +658,7 @@ export default function RegisterClient({
   allStaff,
   needsStaffSignIn,
   upcomingBirthdays,
+  allChildren,
 }: {
   rows: RegisterRow[]
   todayStr: string
@@ -562,6 +672,7 @@ export default function RegisterClient({
   allStaff: StaffUser[]
   needsStaffSignIn: boolean
   upcomingBirthdays: { firstName: string; lastName: string }[]
+  allChildren: { id: string; firstName: string; lastName: string }[]
 }) {
   const router = useRouter()
 
@@ -621,6 +732,7 @@ export default function RegisterClient({
   const [staffLocal, setStaffLocal] = useState<StaffEntry[]>(staffAttendance)
   const [visitorsLocal, setVisitorsLocal] = useState<VisitorEntry[]>(visitors)
   const [showFireRegister, setShowFireRegister] = useState(false)
+  const [showAddExtra, setShowAddExtra] = useState(false)
 
   const staffKey = staffAttendance.map(s => s.id).join(',')
   const visitorsKey = visitors.map(v => `${v.id}:${v.signedOutAt}`).join(',')
@@ -823,6 +935,15 @@ export default function RegisterClient({
         />
       )}
 
+      {showAddExtra && (
+        <AddExtraSessionModal
+          candidates={allChildren.filter(c => !rows.some(r => r.childId === c.id))}
+          todayStr={todayStr}
+          onClose={() => setShowAddExtra(false)}
+          onAdded={() => { setShowAddExtra(false); router.refresh() }}
+        />
+      )}
+
       <div>
         <div className="flex items-start justify-between mb-4 gap-3 flex-wrap">
           <div>
@@ -846,6 +967,13 @@ export default function RegisterClient({
               <div className="text-xl sm:text-2xl font-bold text-cyan-700">{holidayCount}</div>
               <div className="text-xs text-cyan-600">Holiday</div>
             </div>
+            <button
+              onClick={() => setShowAddExtra(true)}
+              title="Add a child for today who isn't normally scheduled this day"
+              className="px-3 py-2 bg-purple-700 text-white text-xs font-medium rounded-lg hover:bg-purple-800 print:hidden"
+            >
+              + Extra day
+            </button>
             <button
               onClick={handleEndSession}
               title="End the session — all children must be individually signed out first"
@@ -942,6 +1070,9 @@ export default function RegisterClient({
                       )}
                       {row.onHoliday && (
                         <span className="text-xs bg-cyan-100 text-cyan-700 px-1.5 py-0.5 rounded-full font-medium">🏖 Holiday</span>
+                      )}
+                      {row.isExtraSession && (
+                        <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium" title="Extra one-off session, not their usual day">🗓 Extra day</span>
                       )}
                       {row.hasUnsignedAccident && (
                         <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">✎ Unsigned</span>

@@ -382,6 +382,22 @@ export const lateFeeInvoices = pgTable('late_fee_invoices', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
+// ─── Extra (one-off) sessions ─────────────────────────────────────────────────
+// A single ad-hoc session on a specific date, outside the child's recurring
+// weekly schedule — shows on the register for that date and bills separately.
+
+export const extraSessions = pgTable('extra_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  childId: uuid('child_id').notNull().references(() => children.id),
+  date: date('date').notNull(),
+  sessionType: sessionTypeEnum('session_type').notNull(),
+  isFunded: boolean('is_funded').notNull().default(false),
+  amount: numeric('amount', { precision: 8, scale: 2 }).notNull(),
+  status: text('status').notNull().default('unpaid'), // 'unpaid' | 'paid' | 'waived'
+  notes: text('notes'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
 // ─── Staff daily attendance ───────────────────────────────────────────────────
 
 export const staffDailyAttendance = pgTable('staff_daily_attendance', {

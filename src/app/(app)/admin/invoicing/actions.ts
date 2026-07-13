@@ -1,7 +1,7 @@
 'use server'
 
 import { db } from '@/lib/db'
-import { invoices, children, childSessions, sessionConfig, terms, lateFeeInvoices, invoiceReminders } from '@/lib/db/schema'
+import { invoices, children, childSessions, sessionConfig, terms, lateFeeInvoices, invoiceReminders, extraSessions } from '@/lib/db/schema'
 import { eq, and, desc } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { countBankHolidaysInTerm } from '@/lib/bankHolidays'
@@ -185,6 +185,27 @@ export async function waiveLateFee(id: string, reason?: string) {
     .set({ status: 'waived', notes: reason || null })
     .where(eq(lateFeeInvoices.id, id))
   revalidatePath('/admin/invoicing')
+}
+
+export async function markExtraSessionPaid(id: string) {
+  await db.update(extraSessions).set({ status: 'paid' }).where(eq(extraSessions.id, id))
+  revalidatePath('/admin/invoicing')
+}
+
+export async function markExtraSessionUnpaid(id: string) {
+  await db.update(extraSessions).set({ status: 'unpaid' }).where(eq(extraSessions.id, id))
+  revalidatePath('/admin/invoicing')
+}
+
+export async function waiveExtraSession(id: string, reason?: string) {
+  await db.update(extraSessions).set({ status: 'waived', notes: reason || null }).where(eq(extraSessions.id, id))
+  revalidatePath('/admin/invoicing')
+}
+
+export async function deleteExtraSession(id: string) {
+  await db.delete(extraSessions).where(eq(extraSessions.id, id))
+  revalidatePath('/admin/invoicing')
+  revalidatePath('/register')
 }
 
 export async function sendInvoiceEmail(id: string, type: 'initial' | 'reminder' = 'initial') {

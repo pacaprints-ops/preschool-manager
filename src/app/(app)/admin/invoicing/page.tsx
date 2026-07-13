@@ -1,5 +1,5 @@
 import { db } from '@/lib/db'
-import { invoices, children, terms, lateFeeInvoices, sessionConfig, invoiceReminders } from '@/lib/db/schema'
+import { invoices, children, terms, lateFeeInvoices, sessionConfig, invoiceReminders, extraSessions } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
@@ -28,6 +28,12 @@ export default async function InvoicingPage() {
     .innerJoin(children, eq(lateFeeInvoices.childId, children.id))
     .orderBy(lateFeeInvoices.date)
 
+  const allExtraSessions = await db
+    .select({ session: extraSessions, child: children })
+    .from(extraSessions)
+    .innerJoin(children, eq(extraSessions.childId, children.id))
+    .orderBy(extraSessions.date)
+
   const sessionConfigs = await db.select().from(sessionConfig)
 
   const allReminders = await db
@@ -52,6 +58,7 @@ export default async function InvoicingPage() {
         invoices={allInvoices}
         activeChildren={activeChildren}
         lateFees={allLateFees}
+        extraSessions={allExtraSessions}
         sessionConfigs={sessionConfigs}
         reminders={serialisedReminders}
       />

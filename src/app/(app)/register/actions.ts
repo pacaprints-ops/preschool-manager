@@ -1,7 +1,7 @@
 'use server'
 
 import { db } from '@/lib/db'
-import { registerEntries, registerNotes, lateFeeInvoices, childSessions } from '@/lib/db/schema'
+import { registerEntries, registerNotes, lateFeeInvoices, childSessions, children, sessionConfig, extraSessions } from '@/lib/db/schema'
 import { and, eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 
@@ -293,4 +293,43 @@ export async function apply48HourRule(childId: string, absenceDate: string) {
   }
 
   revalidatePath('/register')
+}
+
+// Add a one-off session for a child on a specific date, outside their
+// recurring weekly schedule. Shows on the register for that date and
+// creates a separate billable charge (like a late fee) for invoicing.
+export async function addExtraSession(
+  childId: string,
+  date: string,
+  sessionType: 'morning' | 'afternoon' | 'full_day',
+  isFunded: boolean,
+) {
+  const [child] = await db.select().from(children).where(eq(children.id, childId)).limit(1)
+  if (!child) throw new Error('Child not found')
+
+  const [conf] = await db.select().from(sessionConfig).where(eq(sessionConfig.type, sessionType)).limit(1)
+  if (!conf) throw new Error('Session config not found')
+
+  const birth = new Date(child.dateOfBirth + 'T12:00:00')
+  const ref = new Date(date + 'T12:00:00')
+  let age = ref.getFullYear() - birth.getFullYear()
+  const m = ref.getMonth() - birth.getMonth()
+  if (m < 0 || (m === 0 && ref.getDate() < birth.getDate())) age--
+  const is2yo = age <= 2
+
+  const rate = is2yo ? parseFloat(conf.hourlyRate2yo) : parseFloat(conf.hourlyRate34yo)
+  const sessionCost = isFunded ? 0 : rate * parseFloat(conf.hours)
+  const consumable = child.consumableConsent ? parseFloat(conf.contribution) : 0
+  const amount = sessionCost + consumable
+
+  await db.insert(extraSessions).values({
+    childId,
+    date,
+    sessionType,
+    isFunded,
+    amount: amount.toFixed(2),
+  })
+
+  revalidatePath('/register')
+  revalidatePath('/admin/invoicing')
 }

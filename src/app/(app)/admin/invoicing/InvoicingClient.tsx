@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { generateInvoices, markInvoicePaid, markInvoiceUnpaid, deleteInvoice, updateAdjustment, markLateFeePaid, markLateFeeUnpaid, deleteLateFee, waiveLateFee, sendInvoiceEmail, sendLateFeeEmail, sendOverdueReminders } from './actions'
+import { generateInvoices, markInvoicePaid, markInvoiceUnpaid, deleteInvoice, updateAdjustment, markLateFeePaid, markLateFeeUnpaid, deleteLateFee, waiveLateFee, sendInvoiceEmail, sendLateFeeEmail, sendOverdueReminders, markExtraSessionPaid, markExtraSessionUnpaid, deleteExtraSession, waiveExtraSession } from './actions'
 
 type Term = { id: string; name: string; academicYear: string; weekCount: number }
 type ActiveChild = { id: string; firstName: string; lastName: string }
@@ -15,6 +15,18 @@ type LateFeeRow = {
     totalAmount: string
     status: string
     paidAt: Date | null
+    notes: string | null
+  }
+  child: { id: string; firstName: string; lastName: string; parentEmail: string | null }
+}
+type ExtraSessionRow = {
+  session: {
+    id: string
+    date: string
+    sessionType: string
+    isFunded: boolean
+    amount: string
+    status: string
     notes: string | null
   }
   child: { id: string; firstName: string; lastName: string; parentEmail: string | null }
@@ -76,6 +88,10 @@ const STATUS_STYLE: Record<string, string> = {
   overdue: 'bg-red-100 text-red-700',
 }
 
+const SESSION_TYPE_LABEL: Record<string, string> = {
+  morning: 'Morning', afternoon: 'Afternoon', full_day: 'Full Day',
+}
+
 const input = 'border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700'
 
 export default function InvoicingClient({
@@ -83,6 +99,7 @@ export default function InvoicingClient({
   invoices,
   activeChildren,
   lateFees,
+  extraSessions,
   sessionConfigs,
   reminders,
 }: {
@@ -90,6 +107,7 @@ export default function InvoicingClient({
   invoices: InvoiceRow[]
   activeChildren: ActiveChild[]
   lateFees: LateFeeRow[]
+  extraSessions: ExtraSessionRow[]
   sessionConfigs: SessionConfig[]
   reminders: ReminderRow[]
 }) {
@@ -104,6 +122,8 @@ export default function InvoicingClient({
   const [savingAdj, setSavingAdj] = useState(false)
   const [waivingFeeId, setWaivingFeeId] = useState<string | null>(null)
   const [waiveReason, setWaiveReason] = useState('')
+  const [waivingExtraId, setWaivingExtraId] = useState<string | null>(null)
+  const [extraWaiveReason, setExtraWaiveReason] = useState('')
   const [sendingInvoiceId, setSendingInvoiceId] = useState<string | null>(null)
   const [sendingLateFeeId, setSendingLateFeeId] = useState<string | null>(null)
   const [sendingReminders, setSendingReminders] = useState(false)
@@ -316,6 +336,86 @@ export default function InvoicingClient({
                     </button>
                     <button
                       onClick={() => { setWaivingFeeId(null); setWaiveReason('') }}
+                      className="text-xs text-gray-400 hover:text-gray-600"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Extra one-off sessions */}
+      {extraSessions.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-700">Extra one-off sessions</h3>
+            <span className="text-xs text-gray-400">{extraSessions.filter(e => e.session.status === 'unpaid').length} unpaid</span>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {extraSessions.map(({ session: es, child }) => (
+              <div key={es.id} className={`px-4 py-3 ${es.status !== 'unpaid' ? 'opacity-60' : ''}`}>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium text-gray-900 text-sm">{child.firstName} {child.lastName}</span>
+                    <span className="text-xs text-gray-500 ml-2">
+                      {new Date(es.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                      {' — '}{SESSION_TYPE_LABEL[es.sessionType] ?? es.sessionType}
+                      {es.isFunded && ' · funded'}
+                    </span>
+                    {es.status === 'waived' && (
+                      <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">
+                        Waived{es.notes ? ` — ${es.notes}` : ''}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-gray-900">£{parseFloat(es.amount).toFixed(2)}</span>
+                    {es.status === 'unpaid' && (
+                      <>
+                        <button onClick={() => markExtraSessionPaid(es.id)} className="text-xs text-green-600 hover:text-green-700 font-medium">Mark paid</button>
+                        <button
+                          onClick={() => { setWaivingExtraId(es.id); setExtraWaiveReason('') }}
+                          className="text-xs text-amber-600 hover:text-amber-700 font-medium"
+                        >
+                          Waive
+                        </button>
+                      </>
+                    )}
+                    {es.status === 'paid' && (
+                      <button onClick={() => markExtraSessionUnpaid(es.id)} className="text-xs text-gray-400 hover:text-gray-600">Unpaid</button>
+                    )}
+                    {es.status === 'waived' && (
+                      <button onClick={() => markExtraSessionUnpaid(es.id)} className="text-xs text-gray-400 hover:text-gray-600">Undo waive</button>
+                    )}
+                    <button onClick={() => deleteExtraSession(es.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
+                  </div>
+                </div>
+
+                {waivingExtraId === es.id && (
+                  <div className="mt-2 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    <input
+                      autoFocus
+                      value={extraWaiveReason}
+                      onChange={e => setExtraWaiveReason(e.target.value)}
+                      placeholder="Reason (optional)"
+                      className="flex-1 text-xs bg-transparent outline-none text-gray-700 placeholder-gray-400"
+                    />
+                    <button
+                      onClick={async () => {
+                        await waiveExtraSession(es.id, extraWaiveReason.trim() || undefined)
+                        setWaivingExtraId(null)
+                        setExtraWaiveReason('')
+                      }}
+                      className="text-xs font-medium text-amber-700 hover:text-amber-900 whitespace-nowrap"
+                    >
+                      Confirm waive
+                    </button>
+                    <button
+                      onClick={() => { setWaivingExtraId(null); setExtraWaiveReason('') }}
                       className="text-xs text-gray-400 hover:text-gray-600"
                     >
                       Cancel
