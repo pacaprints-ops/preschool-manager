@@ -125,12 +125,30 @@ export const children = pgTable('children', {
 
 // ─── Child sessions (which days/sessions a child attends) ────────────────────
 
+// Funding source for a session or segment: 'paid' (parent pays) or one of the
+// funded entitlement categories tracked on the child's Funding & Entitlements panel.
+export type FundingType = 'paid' | 'universal15' | 'extended30' | 'two_year' | 'senif'
+
 export const childSessions = pgTable('child_sessions', {
   id: uuid('id').primaryKey().defaultRandom(),
   childId: uuid('child_id').notNull().references(() => children.id),
   day: dayEnum('day').notNull(),
   sessionType: sessionTypeEnum('session_type').notNull(),
-  isFunded: boolean('is_funded').notNull().default(false),
+  // Funding for the whole session — the default when the session hasn't been
+  // split into time segments with different funding (see sessionSegments below).
+  fundingType: text('funding_type').notNull().default('paid'),
+})
+
+// A session can optionally be split into time sub-ranges with different funding
+// (e.g. a Full Day session: 9-11 Extended 30h, 11-15 Paid). When a childSessions
+// row has segments, they take precedence over its own fundingType for billing.
+export const sessionSegments = pgTable('session_segments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  childSessionId: uuid('child_session_id').notNull().references(() => childSessions.id, { onDelete: 'cascade' }),
+  startTime: text('start_time').notNull(), // "09:00"
+  endTime: text('end_time').notNull(),
+  fundingType: text('funding_type').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
 // ─── Emergency contacts ───────────────────────────────────────────────────────

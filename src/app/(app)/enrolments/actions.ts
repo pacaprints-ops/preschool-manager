@@ -70,7 +70,7 @@ export async function promoteEnrolmentToChild(
     photoConsent: boolean
     consumableConsent: boolean
     needs1to1: boolean
-    sessions: { day: string; sessionType: string; isFunded: boolean }[]
+    sessions: { day: string; sessionType: string; fundingType: string }[]
     contactName: string
     contactRelationship: string
     contactPhone: string
@@ -99,7 +99,7 @@ export async function promoteEnrolmentToChild(
         childId: child.id,
         day: s.day as 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday',
         sessionType: s.sessionType as 'morning' | 'afternoon' | 'full_day',
-        isFunded: s.isFunded,
+        fundingType: s.fundingType,
       }))
     )
   }
@@ -152,7 +152,7 @@ export async function bulkPromoteEnrolments(intakeYear: number): Promise<{
 
     const daysSessions = e.daysSessions ? (JSON.parse(e.daysSessions) as Record<string, string>) : {}
     const sessions = Object.entries(daysSessions).map(([day, sessionType]) => ({
-      day, sessionType, isFunded: false,
+      day, sessionType, fundingType: 'paid',
     }))
 
     await promoteEnrolmentToChild(e.id, e.depositPaid, {

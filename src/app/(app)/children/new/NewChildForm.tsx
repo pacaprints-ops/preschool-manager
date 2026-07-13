@@ -9,8 +9,10 @@ const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const
 const SESSIONS = ['morning', 'afternoon', 'full_day'] as const
 const DAY_LABELS: Record<string, string> = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri' }
 const SESSION_LABELS: Record<string, string> = { morning: 'AM', afternoon: 'PM', full_day: 'All Day' }
-
-type SessionStatus = 'paid' | 'funded'
+const FUNDING_TYPES = ['paid', 'universal15', 'extended30', 'two_year', 'senif'] as const
+const FUNDING_LABELS: Record<string, string> = {
+  paid: 'Paid', universal15: 'Universal 15h', extended30: 'Extended 30h', two_year: '2-Year', senif: 'SENIF',
+}
 
 type EmergencyContactDraft = {
   name: string
@@ -30,7 +32,7 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
   const [hasAllergies, setHasAllergies] = useState(false)
   const [consumableConsent, setConsumableConsent] = useState(false)
   const [needs1to1, setNeeds1to1] = useState(false)
-  const [sessions, setSessions] = useState<Record<string, SessionStatus>>({})
+  const [sessions, setSessions] = useState<Record<string, string>>({})
   const [depositPaid, setDepositPaid] = useState(false)
   const [twoYearFunding, setTwoYearFunding] = useState(false)
   const [extendedHours, setExtendedHours] = useState(false)
@@ -64,8 +66,8 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
     })
   }
 
-  function toggleFunded(key: string) {
-    setSessions(s => ({ ...s, [key]: s[key] === 'funded' ? 'paid' : 'funded' }))
+  function setFundingType(key: string, fundingType: string) {
+    setSessions(s => ({ ...s, [key]: fundingType }))
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -100,9 +102,9 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
     })
 
     if (Object.keys(sessions).length > 0) {
-      const parsed = Object.entries(sessions).map(([key, status]) => {
+      const parsed = Object.entries(sessions).map(([key, fundingType]) => {
         const [day, ...rest] = key.split('-')
-        return { day, sessionType: rest.join('-'), isFunded: status === 'funded' }
+        return { day, sessionType: rest.join('-'), fundingType }
       })
       await updateChildSessions(result.id, parsed)
     }
@@ -162,7 +164,7 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
       {/* Sessions */}
       <div className="border-t border-gray-100 pt-4">
         <label className="block text-sm font-medium text-gray-700 mb-1">Sessions attending</label>
-        <p className="text-xs text-gray-500 mb-3">Tick a session then click the badge to mark it as Funded or Paid.</p>
+        <p className="text-xs text-gray-500 mb-3">Tick a session then choose how it's funded. Splitting a session into part-funded/part-paid time ranges can be done afterward on the child's profile.</p>
         <table className="text-sm border-collapse">
           <thead>
             <tr>
@@ -189,17 +191,19 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
                           className="rounded w-4 h-4 accent-blue-800"
                         />
                         {status && (
-                          <button
-                            type="button"
-                            onClick={() => toggleFunded(key)}
-                            className={`text-xs px-2 py-0.5 rounded-full font-medium transition-colors ${
-                              status === 'funded'
-                                ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                                : 'bg-blue-100 text-blue-900 hover:bg-blue-200'
+                          <select
+                            value={status}
+                            onChange={e => setFundingType(key, e.target.value)}
+                            className={`text-xs px-1.5 py-0.5 rounded-full font-medium border-0 ${
+                              status === 'paid'
+                                ? 'bg-blue-100 text-blue-900'
+                                : 'bg-green-100 text-green-700'
                             }`}
                           >
-                            {status === 'funded' ? 'Funded' : 'Paid'}
-                          </button>
+                            {FUNDING_TYPES.map(ft => (
+                              <option key={ft} value={ft}>{FUNDING_LABELS[ft]}</option>
+                            ))}
+                          </select>
                         )}
                       </div>
                     </td>

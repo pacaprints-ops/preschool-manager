@@ -1,8 +1,8 @@
 'use server'
 
 import { db } from '@/lib/db'
-import { invoices, children, childSessions, sessionConfig, terms, lateFeeInvoices, invoiceReminders, extraSessions } from '@/lib/db/schema'
-import { eq, and, desc } from 'drizzle-orm'
+import { invoices, children, childSessions, sessionConfig, terms, lateFeeInvoices, invoiceReminders, extraSessions, sessionSegments } from '@/lib/db/schema'
+import { eq, and, desc, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { countBankHolidaysInTerm } from '@/lib/bankHolidays'
 import { sendEmail, buildInvoiceEmail, buildLateFeeEmail } from '@/lib/email'
@@ -14,6 +14,30 @@ function ageAtDate(dob: string, refDate: string): number {
   const m = r.getMonth() - d.getMonth()
   if (m < 0 || (m === 0 && r.getDate() < d.getDate())) age--
   return age
+}
+
+function hoursBetween(start: string, end: string): number {
+  const [sh, sm] = start.split(':').map(Number)
+  const [eh, em] = end.split(':').map(Number)
+  return Math.max(0, (eh * 60 + em - (sh * 60 + sm)) / 60)
+}
+
+// A single billable unit of time within a session, with its own funding.
+// A session with no custom split is just one unit spanning the whole slot.
+type BillingUnit = { hours: number; fundingType: string }
+
+function unitsForSession(
+  session: { id: string; sessionType: string; fundingType: string },
+  segmentsByChildSession: Record<string, { startTime: string; endTime: string; fundingType: string }[]>,
+  sessionMap: Record<string, { startTime: string; endTime: string; hours: string }>,
+): BillingUnit[] {
+  const segs = segmentsByChildSession[session.id]
+  if (segs && segs.length > 0) {
+    return segs.map(seg => ({ hours: hoursBetween(seg.startTime, seg.endTime), fundingType: seg.fundingType }))
+  }
+  const conf = sessionMap[session.sessionType]
+  if (!conf) return []
+  return [{ hours: parseFloat(conf.hours), fundingType: session.fundingType }]
 }
 
 export async function generateInvoices(termId: string, selectedChildIds?: string[]) {
@@ -38,6 +62,17 @@ export async function generateInvoices(termId: string, selectedChildIds?: string
     childMap[child.id].sessions.push(session)
   }
 
+  // Segments for any split sessions, grouped by their childSessions row
+  const allChildSessionIds = activeChildren.map(r => r.session.id)
+  const allSegments = allChildSessionIds.length > 0
+    ? await db.select().from(sessionSegments).where(inArray(sessionSegments.childSessionId, allChildSessionIds))
+    : []
+  const segmentsByChildSession: Record<string, typeof allSegments> = {}
+  for (const seg of allSegments) {
+    if (!segmentsByChildSession[seg.childSessionId]) segmentsByChildSession[seg.childSessionId] = []
+    segmentsByChildSession[seg.childSessionId].push(seg)
+  }
+
   // Filter to selected children if provided
   const toInvoice = selectedChildIds?.length
     ? Object.values(childMap).filter(({ child }) => selectedChildIds.includes(child.id))
@@ -57,43 +92,45 @@ export async function generateInvoices(termId: string, selectedChildIds?: string
     const weeks = term[0].weekCount
     const age = ageAtDate(child.dateOfBirth, term[0].startDate)
     const is2yo = age <= 2
+    const rateForAge = (conf: { hourlyRate2yo: string; hourlyRate34yo: string }) =>
+      is2yo ? parseFloat(conf.hourlyRate2yo) : parseFloat(conf.hourlyRate34yo)
 
-    const fundedSess = childSess.filter(s => s.isFunded)
-    const paidSess = childSess.filter(s => !s.isFunded)
-    const allSess = childSess
-
-    // Paid session costs (age-based hourly rate)
-    let paidCostPerWeek = 0
+    // Break each session into billing units (a whole session, or its time
+    // segments if it's been split), each independently paid or funded.
     let paidHoursPerWeek = 0
-    for (const s of paidSess) {
-      const conf = sessionMap[s.sessionType]
-      if (conf) {
-        const rate = is2yo ? parseFloat(conf.hourlyRate2yo) : parseFloat(conf.hourlyRate34yo)
-        paidCostPerWeek += rate * parseFloat(conf.hours)
-        paidHoursPerWeek += parseFloat(conf.hours)
-      }
-    }
-
-    // Funded session info (informational — £0 charge)
-    let fundedValuePerWeek = 0
+    let paidCostPerWeek = 0
     let fundedHoursPerWeek = 0
-    for (const s of fundedSess) {
+    let fundedValuePerWeek = 0
+    let paidUnitCount = 0
+    let fundedUnitCount = 0
+
+    for (const s of childSess) {
       const conf = sessionMap[s.sessionType]
-      if (conf) {
-        const rate = is2yo ? parseFloat(conf.hourlyRate2yo) : parseFloat(conf.hourlyRate34yo)
-        fundedValuePerWeek += rate * parseFloat(conf.hours)
-        fundedHoursPerWeek += parseFloat(conf.hours)
+      if (!conf) continue
+      const units = unitsForSession(s, segmentsByChildSession, sessionMap)
+      const rate = rateForAge(conf)
+      for (const unit of units) {
+        if (unit.fundingType === 'paid') {
+          paidHoursPerWeek += unit.hours
+          paidCostPerWeek += unit.hours * rate
+          paidUnitCount++
+        } else {
+          fundedHoursPerWeek += unit.hours
+          fundedValuePerWeek += unit.hours * rate
+          fundedUnitCount++
+        }
       }
     }
 
-    // Consumable: £3.50 per session for ALL sessions (funded + paid), only if consent given
-    const totalSessionsPerWeek = allSess.length
+    // Consumable: £3.50 per session-day for ALL sessions (funded + paid alike,
+    // charged once per session regardless of any time split), only if consent given
+    const totalSessionsPerWeek = childSess.length
     const totalSessionsForTerm = totalSessionsPerWeek * weeks
     const contribution = configs[0] ? parseFloat(configs[0].contribution) : 3.50
     const contributionTotal = child.consumableConsent ? contribution * totalSessionsForTerm : 0
 
-    const paidSessionsTotal = paidSess.length * weeks
-    const fundedSessionsTotal = fundedSess.length * weeks
+    const paidSessionsTotal = paidUnitCount * weeks
+    const fundedSessionsTotal = fundedUnitCount * weeks
     const sessionCost = paidCostPerWeek * weeks
     const fundedValue = fundedValuePerWeek * weeks
     const fundedHoursTotal = fundedHoursPerWeek * weeks

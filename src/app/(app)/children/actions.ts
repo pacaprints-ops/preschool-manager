@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 import {
   children, childSessions, emergencyContacts, medications,
   childNotes, accidentForms, waitingList, childSiblings, medicineAdministrations,
-  childHolidays, registerEntries,
+  childHolidays, registerEntries, sessionSegments,
 } from '@/lib/db/schema'
 import { eq, or, and, gte, lte, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
@@ -111,7 +111,8 @@ export async function unarchiveChild(id: string) {
 
 // ─── Sessions ─────────────────────────────────────────────────────────────────
 
-export async function updateChildSessions(childId: string, sessions: { day: string; sessionType: string; isFunded: boolean }[]) {
+export async function updateChildSessions(childId: string, sessions: { day: string; sessionType: string; fundingType: string }[]) {
+  // Cascades: deleting a child_sessions row also deletes any of its session_segments
   await db.delete(childSessions).where(eq(childSessions.childId, childId))
   if (sessions.length > 0) {
     await db.insert(childSessions).values(
@@ -119,8 +120,24 @@ export async function updateChildSessions(childId: string, sessions: { day: stri
         childId,
         day: s.day as 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday',
         sessionType: s.sessionType as 'morning' | 'afternoon' | 'full_day',
-        isFunded: s.isFunded,
+        fundingType: s.fundingType,
       }))
+    )
+  }
+  revalidatePath(`/children/${childId}`)
+}
+
+// Split (or un-split) a single session into time segments with different funding.
+// Pass an empty array to remove the split and fall back to the session's own fundingType.
+export async function setSessionSegments(
+  childSessionId: string,
+  childId: string,
+  segments: { startTime: string; endTime: string; fundingType: string }[],
+) {
+  await db.delete(sessionSegments).where(eq(sessionSegments.childSessionId, childSessionId))
+  if (segments.length > 0) {
+    await db.insert(sessionSegments).values(
+      segments.map(s => ({ childSessionId, startTime: s.startTime, endTime: s.endTime, fundingType: s.fundingType }))
     )
   }
   revalidatePath(`/children/${childId}`)

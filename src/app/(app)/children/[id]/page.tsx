@@ -2,7 +2,7 @@ import { db } from '@/lib/db'
 import {
   children, childSessions, emergencyContacts, medications,
   childNotes, accidentForms, registerEntries, terms, users, childSiblings, medicineAdministrations,
-  childHolidays,
+  childHolidays, sessionSegments, sessionConfig,
 } from '@/lib/db/schema'
 import { eq, and, inArray } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
@@ -81,6 +81,14 @@ export default async function ChildProfilePage({
       droppedBy: registerEntries.droppedBy,
       rule48h: registerEntries.rule48h,
     }).from(registerEntries).where(eq(registerEntries.childId, id)).orderBy(registerEntries.date),
+  ])
+
+  const childSessionIds = childSessionsData.map(s => s.id)
+  const [segments, sessionConfigs] = await Promise.all([
+    childSessionIds.length > 0
+      ? db.select().from(sessionSegments).where(inArray(sessionSegments.childSessionId, childSessionIds))
+      : Promise.resolve([]),
+    db.select().from(sessionConfig),
   ])
 
   // Fetch sibling details
@@ -188,7 +196,7 @@ export default async function ChildProfilePage({
             dep: child.dep,
           }}
         />
-        <SessionsSection childId={id} sessions={childSessionsData} />
+        <SessionsSection childId={id} sessions={childSessionsData} segments={segments} sessionConfigs={sessionConfigs} />
         <MedicationsSection
           childId={id}
           medications={meds}

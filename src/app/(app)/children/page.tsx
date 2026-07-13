@@ -39,7 +39,7 @@ export default async function ChildrenPage() {
     sessions: (sessionMap[child.id] ?? []).map(s => ({
       day: s.day,
       sessionType: s.sessionType,
-      isFunded: s.isFunded,
+      fundingType: s.fundingType,
     })),
   }))
 

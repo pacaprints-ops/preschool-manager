@@ -8,8 +8,10 @@ const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const
 const SESSIONS = ['morning', 'afternoon', 'full_day'] as const
 const DAY_LABELS: Record<string, string> = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri' }
 const SESSION_LABELS: Record<string, string> = { morning: 'AM', afternoon: 'PM', full_day: 'All Day' }
-
-type SessionStatus = 'paid' | 'funded'
+const FUNDING_TYPES = ['paid', 'universal15', 'extended30', 'two_year', 'senif'] as const
+const FUNDING_LABELS: Record<string, string> = {
+  paid: 'Paid', universal15: 'Universal 15h', extended30: 'Extended 30h', two_year: '2-Year', senif: 'SENIF',
+}
 
 type DefaultValues = {
   firstName: string
@@ -23,8 +25,8 @@ type DefaultValues = {
   depositPaid: boolean
 }
 
-function buildInitialSessions(daysSessions: Record<string, string>): Record<string, SessionStatus> {
-  const result: Record<string, SessionStatus> = {}
+function buildInitialSessions(daysSessions: Record<string, string>): Record<string, string> {
+  const result: Record<string, string> = {}
   for (const [day, sessionType] of Object.entries(daysSessions)) {
     result[`${day}-${sessionType}`] = 'paid'
   }
@@ -62,7 +64,7 @@ export default function PromoteForm({
   const [contactRelationship, setContactRelationship] = useState('Parent/Carer')
   const [contactPhone, setContactPhone] = useState(defaultValues.contactPhone)
   const [contactEmail, setContactEmail] = useState(defaultValues.contactEmail)
-  const [sessions, setSessions] = useState<Record<string, SessionStatus>>(
+  const [sessions, setSessions] = useState<Record<string, string>>(
     buildInitialSessions(defaultValues.daysSessions)
   )
 
@@ -76,8 +78,8 @@ export default function PromoteForm({
     })
   }
 
-  function toggleFunded(key: string) {
-    setSessions(s => ({ ...s, [key]: s[key] === 'funded' ? 'paid' : 'funded' }))
+  function setFundingType(key: string, fundingType: string) {
+    setSessions(s => ({ ...s, [key]: fundingType }))
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -85,9 +87,9 @@ export default function PromoteForm({
     if (!firstName || !lastName || !dateOfBirth) return
     setLoading(true)
 
-    const parsedSessions = Object.entries(sessions).map(([key, status]) => {
+    const parsedSessions = Object.entries(sessions).map(([key, fundingType]) => {
       const [day, ...rest] = key.split('-')
-      return { day, sessionType: rest.join('-'), isFunded: status === 'funded' }
+      return { day, sessionType: rest.join('-'), fundingType }
     })
 
     const childId = await promoteEnrolmentToChild(enrolmentId, defaultValues.depositPaid, {
@@ -172,7 +174,7 @@ export default function PromoteForm({
           <h2 className="text-sm font-semibold text-gray-700">Sessions attending</h2>
           {Object.keys(defaultValues.daysSessions).length > 0 && fromEnrolment}
         </div>
-        <p className="text-xs text-gray-500 mb-3">Pre-filled from enrolment. Toggle a session to change it, click the badge to mark Funded or Paid.</p>
+        <p className="text-xs text-gray-500 mb-3">Pre-filled from enrolment. Toggle a session to change it, choose how each is funded from the dropdown.</p>
         <table className="text-sm border-collapse">
           <thead>
             <tr>
@@ -199,17 +201,19 @@ export default function PromoteForm({
                           className="rounded w-4 h-4 accent-blue-800"
                         />
                         {status && (
-                          <button
-                            type="button"
-                            onClick={() => toggleFunded(key)}
-                            className={`text-xs px-2 py-0.5 rounded-full font-medium transition-colors ${
-                              status === 'funded'
-                                ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                                : 'bg-blue-100 text-blue-900 hover:bg-blue-200'
+                          <select
+                            value={status}
+                            onChange={e => setFundingType(key, e.target.value)}
+                            className={`text-xs px-1.5 py-0.5 rounded-full font-medium border-0 ${
+                              status === 'paid'
+                                ? 'bg-blue-100 text-blue-900'
+                                : 'bg-green-100 text-green-700'
                             }`}
                           >
-                            {status === 'funded' ? 'Funded' : 'Paid'}
-                          </button>
+                            {FUNDING_TYPES.map(ft => (
+                              <option key={ft} value={ft}>{FUNDING_LABELS[ft]}</option>
+                            ))}
+                          </select>
                         )}
                       </div>
                     </td>

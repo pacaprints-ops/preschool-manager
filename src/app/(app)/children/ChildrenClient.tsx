@@ -10,7 +10,7 @@ type ChildRow = {
   dateOfBirth: string
   hasAllergies: boolean
   keyWorkerName: string | null
-  sessions: { day: string; sessionType: string; isFunded: boolean }[]
+  sessions: { day: string; sessionType: string; fundingType: string }[]
 }
 
 const DAY_SHORT: Record<string, string> = {
@@ -245,8 +245,8 @@ export default function ChildrenClient({
                       {child.sessions.length === 0 ? (
                         <span className="text-gray-400">—</span>
                       ) : (() => {
-                        const f = child.sessions.filter(s => s.isFunded).length
-                        const p = child.sessions.filter(s => !s.isFunded).length
+                        const f = child.sessions.filter(s => s.fundingType !== 'paid').length
+                        const p = child.sessions.filter(s => s.fundingType === 'paid').length
                         return (
                           <div className="flex gap-1 flex-wrap">
                             {f > 0 && <span className="bg-green-100 text-green-700 text-xs px-1.5 py-0.5 rounded-full">{f}F</span>}
