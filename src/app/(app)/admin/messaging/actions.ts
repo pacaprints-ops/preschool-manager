@@ -10,7 +10,7 @@ import { sendEmail, buildParentMessageEmail } from '@/lib/email'
 export async function sendParentMessage(data: {
   subject: string
   body: string
-  filterType: 'all' | 'morning' | 'afternoon' | 'full_day' | 'single_child'
+  filterType: 'all' | 'morning' | 'afternoon' | 'full_day' | 'single_child' | `day:${string}`
   childId?: string
 }) {
   const session = await auth()
@@ -25,6 +25,14 @@ export async function sendParentMessage(data: {
 
   if (data.filterType === 'single_child' && data.childId) {
     eligible = eligible.filter(c => c.id === data.childId)
+  } else if (data.filterType.startsWith('day:')) {
+    const day = data.filterType.replace('day:', '') as 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday'
+    const sessionsOnDay = await db
+      .select({ childId: childSessions.childId })
+      .from(childSessions)
+      .where(eq(childSessions.day, day))
+    const childIdsOnDay = new Set(sessionsOnDay.map(s => s.childId))
+    eligible = eligible.filter(c => childIdsOnDay.has(c.id))
   } else if (data.filterType !== 'all') {
     const sessionsWithType = await db
       .select({ childId: childSessions.childId })

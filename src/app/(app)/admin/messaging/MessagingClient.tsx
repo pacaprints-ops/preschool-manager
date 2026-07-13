@@ -23,6 +23,10 @@ const FILTER_LABELS: Record<string, string> = {
   single_child: 'Single child',
 }
 
+const DAY_LABELS: Record<string, string> = {
+  monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday', friday: 'Friday',
+}
+
 const input = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700'
 
 function filterLabel(filterType: string, childList: ChildItem[]): string {
@@ -30,6 +34,10 @@ function filterLabel(filterType: string, childList: ChildItem[]): string {
     const id = filterType.replace('single:', '')
     const child = childList.find(c => c.id === id)
     return child ? `Single child — ${child.name}` : 'Single child'
+  }
+  if (filterType.startsWith('day:')) {
+    const day = filterType.replace('day:', '')
+    return `${DAY_LABELS[day] ?? day} parents only`
   }
   return FILTER_LABELS[filterType] ?? filterType
 }
@@ -45,7 +53,7 @@ export default function MessagingClient({
 }) {
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
-  const [filterType, setFilterType] = useState<'all' | 'morning' | 'afternoon' | 'full_day' | 'single_child'>('all')
+  const [filterType, setFilterType] = useState<'all' | 'morning' | 'afternoon' | 'full_day' | 'single_child' | `day:${string}`>('all')
   const [childSearch, setChildSearch] = useState('')
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null)
   const [pdfFile, setPdfFile] = useState<File | null>(null)
@@ -114,6 +122,11 @@ export default function MessagingClient({
               <option value="morning">Morning session parents only</option>
               <option value="afternoon">Afternoon session parents only</option>
               <option value="full_day">Full day session parents only</option>
+              <option value="day:monday">Monday only</option>
+              <option value="day:tuesday">Tuesday only</option>
+              <option value="day:wednesday">Wednesday only</option>
+              <option value="day:thursday">Thursday only</option>
+              <option value="day:friday">Friday only</option>
               <option value="single_child">Single child…</option>
             </select>
           </div>
