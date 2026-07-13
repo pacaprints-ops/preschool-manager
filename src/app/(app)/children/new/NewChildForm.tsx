@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createChild, updateChildSessions } from '../actions'
+import { createChild, updateChildSessions, addEmergencyContact } from '../actions'
 import Link from 'next/link'
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const
@@ -11,6 +11,18 @@ const DAY_LABELS: Record<string, string> = { monday: 'Mon', tuesday: 'Tue', wedn
 const SESSION_LABELS: Record<string, string> = { morning: 'AM', afternoon: 'PM', full_day: 'All Day' }
 
 type SessionStatus = 'paid' | 'funded'
+
+type EmergencyContactDraft = {
+  name: string
+  relationship: string
+  phone: string
+  email: string
+  isAuthorisedCollector: boolean
+}
+
+function blankContact(): EmergencyContactDraft {
+  return { name: '', relationship: '', phone: '', email: '', isAuthorisedCollector: false }
+}
 
 export default function NewChildForm({ staff }: { staff: { id: string; name: string }[] }) {
   const router = useRouter()
@@ -26,6 +38,21 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
   const [sen, setSen] = useState(false)
   const [daf, setDaf] = useState(false)
   const [dep, setDep] = useState(false)
+
+  const [contacts, setContacts] = useState<EmergencyContactDraft[]>([])
+  const [addingContact, setAddingContact] = useState(false)
+  const [contactForm, setContactForm] = useState<EmergencyContactDraft>(blankContact())
+
+  function handleAddContact() {
+    if (!contactForm.name || !contactForm.relationship || !contactForm.phone) return
+    setContacts(c => [...c, contactForm])
+    setContactForm(blankContact())
+    setAddingContact(false)
+  }
+
+  function removeContact(index: number) {
+    setContacts(c => c.filter((_, i) => i !== index))
+  }
 
   function toggle(day: string, session: string) {
     const key = `${day}-${session}`
@@ -78,6 +105,16 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
         return { day, sessionType: rest.join('-'), isFunded: status === 'funded' }
       })
       await updateChildSessions(result.id, parsed)
+    }
+
+    for (const contact of contacts) {
+      await addEmergencyContact(result.id, {
+        name: contact.name,
+        relationship: contact.relationship,
+        phone: contact.phone,
+        email: contact.email || undefined,
+        isAuthorisedCollector: contact.isAuthorisedCollector,
+      })
     }
 
     router.push(`/children/${result.id}`)
@@ -174,9 +211,12 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
         </table>
       </div>
 
-      {/* Parent / carer */}
+      {/* Parent / Billing Contact */}
       <div className="border-t border-gray-100 pt-4 space-y-3">
-        <h2 className="text-sm font-semibold text-gray-700">Parent / Carer</h2>
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700">Parent / Billing Contact</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Invoice emails are sent to this address</p>
+        </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
@@ -188,9 +228,75 @@ export default function NewChildForm({ staff }: { staff: { id: string; name: str
           </div>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Email (for invoices)</label>
           <input name="parentEmail" type="email" className={inp} />
         </div>
+      </div>
+
+      {/* Emergency Contacts */}
+      <div className="border-t border-gray-100 pt-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-700">Emergency Contacts</h2>
+          <button type="button" onClick={() => setAddingContact(a => !a)} className="text-xs text-blue-800 hover:text-blue-900">
+            {addingContact ? 'Cancel' : '+ Add'}
+          </button>
+        </div>
+
+        {contacts.length === 0 && !addingContact && (
+          <p className="text-sm text-gray-400">No contacts added yet.</p>
+        )}
+
+        {contacts.length > 0 && (
+          <div className="space-y-2">
+            {contacts.map((c, i) => (
+              <div key={i} className="flex items-start justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="text-sm">
+                  <div className="font-medium text-gray-900">
+                    {c.name}
+                    {c.isAuthorisedCollector && (
+                      <span className="ml-2 text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">Authorised collector</span>
+                    )}
+                  </div>
+                  <div className="text-gray-500">{c.relationship} · {c.phone}</div>
+                  {c.email && <div className="text-gray-500">{c.email}</div>}
+                </div>
+                <button type="button" onClick={() => removeContact(i)} className="text-xs text-red-400 hover:text-red-600">Remove</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {addingContact && (
+          <div className="border-t border-gray-100 pt-3 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Name *</label>
+                <input value={contactForm.name} onChange={e => setContactForm(f => ({ ...f, name: e.target.value }))} className={inp} />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Relationship *</label>
+                <input value={contactForm.relationship} onChange={e => setContactForm(f => ({ ...f, relationship: e.target.value }))} placeholder="e.g. Mother, Grandparent" className={inp} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Phone *</label>
+                <input value={contactForm.phone} onChange={e => setContactForm(f => ({ ...f, phone: e.target.value }))} className={inp} />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Email</label>
+                <input value={contactForm.email} onChange={e => setContactForm(f => ({ ...f, email: e.target.value }))} className={inp} />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="contactCollector" checked={contactForm.isAuthorisedCollector} onChange={e => setContactForm(f => ({ ...f, isAuthorisedCollector: e.target.checked }))} className="rounded" />
+              <label htmlFor="contactCollector" className="text-sm text-gray-700">Authorised to collect child</label>
+            </div>
+            <button type="button" onClick={handleAddContact} className="px-4 py-2 bg-blue-500 hover:bg-blue-900 text-white text-sm rounded-lg">
+              Add contact
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Allergies + medical */}
