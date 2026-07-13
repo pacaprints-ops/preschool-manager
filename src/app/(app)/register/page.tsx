@@ -10,6 +10,18 @@ import RegisterClient from './RegisterClient'
 
 const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 
+// True if the child's birthday (month+day) falls within the next `days` days, rolling from today (inclusive)
+function isBirthdayWithinDays(dob: string, todayStr: string, days: number): boolean {
+  const today = new Date(todayStr + 'T12:00:00')
+  const birth = new Date(dob + 'T12:00:00')
+  for (let i = 0; i < days; i++) {
+    const d = new Date(today)
+    d.setDate(today.getDate() + i)
+    if (birth.getMonth() === d.getMonth() && birth.getDate() === d.getDate()) return true
+  }
+  return false
+}
+
 export default async function RegisterPage() {
   const session = await auth()
   const today = new Date()
@@ -22,6 +34,16 @@ export default async function RegisterPage() {
     .innerJoin(children, eq(childSessions.childId, children.id))
     .where(and(eq(childSessions.day, dayName), eq(children.archived, false)))
     .orderBy(desc(children.dateOfBirth), asc(children.firstName), asc(children.lastName))
+
+  // All active children, for the rolling 7-day birthday flag (not just today's attendees)
+  const allActiveChildren = await db
+    .select({ id: children.id, firstName: children.firstName, lastName: children.lastName, dateOfBirth: children.dateOfBirth })
+    .from(children)
+    .where(eq(children.archived, false))
+
+  const upcomingBirthdays = allActiveChildren
+    .filter(c => isBirthdayWithinDays(c.dateOfBirth, todayStr, 7))
+    .map(c => ({ firstName: c.firstName, lastName: c.lastName }))
 
   const [
     existingEntries,
@@ -142,6 +164,7 @@ export default async function RegisterPage() {
       visitors={visitorRows}
       allStaff={uniqueStaff}
       needsStaffSignIn={staffAttendanceToday.length === 0}
+      upcomingBirthdays={upcomingBirthdays}
     />
   )
 }

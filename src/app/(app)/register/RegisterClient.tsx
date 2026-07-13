@@ -78,15 +78,13 @@ const DAY_ABBR: Record<string, string> = {
   monday: 'mon', tuesday: 'tue', wednesday: 'wed', thursday: 'thu', friday: 'fri',
 }
 
+// True if the child's birthday (month+day) falls within the next 7 days, rolling from today (inclusive)
 function birthdayThisWeek(dob: string, todayStr: string): boolean {
   const today = new Date(todayStr + 'T12:00:00')
-  const dayOfWeek = today.getDay() // 0=Sun
-  const monday = new Date(today)
-  monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
-  const sunday = new Date(monday)
-  sunday.setDate(monday.getDate() + 6)
   const birth = new Date(dob + 'T12:00:00')
-  for (let d = new Date(monday); d <= sunday; d.setDate(d.getDate() + 1)) {
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today)
+    d.setDate(today.getDate() + i)
     if (birth.getMonth() === d.getMonth() && birth.getDate() === d.getDate()) return true
   }
   return false
@@ -550,6 +548,7 @@ export default function RegisterClient({
   visitors,
   allStaff,
   needsStaffSignIn,
+  upcomingBirthdays,
 }: {
   rows: RegisterRow[]
   todayStr: string
@@ -562,6 +561,7 @@ export default function RegisterClient({
   visitors: VisitorEntry[]
   allStaff: StaffUser[]
   needsStaffSignIn: boolean
+  upcomingBirthdays: { firstName: string; lastName: string }[]
 }) {
   const router = useRouter()
 
@@ -879,21 +879,13 @@ export default function RegisterClient({
           </div>
         )}
 
-        {/* Birthday banner */}
-        {(() => {
-          const birthdays = [...new Map(
-            rows
-              .filter(r => birthdayThisWeek(r.dateOfBirth, todayStr))
-              .map(r => [r.childId, r])
-          ).values()]
-          if (birthdays.length === 0) return null
-          return (
-            <div className="mb-4 bg-pink-50 border border-pink-200 rounded-lg px-4 py-3 text-sm text-pink-800 print:hidden">
-              🎂 <strong>Birthday this week:</strong>{' '}
-              {birthdays.map(r => `${r.firstName} ${r.lastName}`).join(', ')}
-            </div>
-          )
-        })()}
+        {/* Birthday banner — all active children with a birthday in the next 7 days */}
+        {upcomingBirthdays.length > 0 && (
+          <div className="mb-4 bg-pink-50 border border-pink-200 rounded-lg px-4 py-3 text-sm text-pink-800 print:hidden">
+            🎂 <strong>Birthday coming up:</strong>{' '}
+            {upcomingBirthdays.map(c => `${c.firstName} ${c.lastName}`).join(', ')}
+          </div>
+        )}
 
 
         {/* Children register */}
