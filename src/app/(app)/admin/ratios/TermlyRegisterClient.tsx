@@ -268,18 +268,28 @@ export default function TermlyRegisterClient({
               {/* Spacer */}
               <tr><td colSpan={11} className="py-0.5 bg-gray-200" /></tr>
 
+              {/* Staffing summary heading */}
+              <tr className="bg-[#eef2f7]">
+                <td colSpan={11} className="px-3 py-1 text-xs font-bold text-[#020e2f] uppercase tracking-wider border-b border-gray-200">
+                  Staffing &amp; Ratios by Day
+                </td>
+              </tr>
+
               {/* Footer rows */}
               {[
-                { label: 'Total Children', values: dayStats.map(s => s.total), cls: 'font-bold text-gray-800' },
-                { label: '2 Year Olds', values: dayStats.map(s => s.count2yr), cls: 'text-blue-700 font-medium' },
-                { label: 'Staff in Ratio', values: dayStats.map(s => s.staffInRatio), cls: 'text-gray-700 font-medium' },
-                { label: '1A (1-2-1)', values: dayStats.map(s => s.count1to1), cls: 'text-purple-700 font-medium' },
-                { label: 'Total Staff', values: dayStats.map(s => s.totalStaff), cls: 'font-bold text-gray-900' },
-              ].map(row => (
-                <tr key={row.label} className="bg-gray-50 border-t border-gray-200">
-                  <td colSpan={5} className="px-3 py-1.5 text-xs font-semibold text-gray-700">{row.label}</td>
-                  {row.values.map((v, i) => (
-                    <td key={i} className={`px-1 py-1.5 text-center text-xs border-r border-gray-200 ${row.cls}`}>
+                { label: 'Total children attending', hint: 'All children booked in that day', values: dayStats.map(s => s.total), cls: 'font-bold text-gray-800' },
+                { label: '— of which, 2 year olds', hint: 'Counted at 1 staff : 4 children', values: dayStats.map(s => s.count2yr), cls: 'text-blue-700 font-medium' },
+                { label: 'Staff required (ratio)', hint: 'Minimum staff needed to meet EYFS ratios', values: dayStats.map(s => s.staffInRatio), cls: 'text-gray-700 font-medium' },
+                { label: '+ 1-2-1 support staff', hint: 'Dedicated keyworkers, on top of ratio', values: dayStats.map(s => s.count1to1), cls: 'text-purple-700 font-medium' },
+                { label: '= Total staff needed', hint: 'Ratio staff plus 1-2-1 support', values: dayStats.map(s => s.totalStaff), cls: 'font-bold text-gray-900' },
+              ].map((row, rowIndex) => (
+                <tr key={row.label} className={`border-t border-gray-100 ${rowIndex === 4 ? 'bg-blue-50/50 border-t-2 border-t-blue-200' : 'bg-gray-50'}`}>
+                  <td colSpan={5} className="px-3 py-1.5 text-xs">
+                    <span className="font-semibold text-gray-700">{row.label}</span>
+                    <span className="hidden lg:inline text-gray-400 font-normal ml-1.5">— {row.hint}</span>
+                  </td>
+                  {row.values.map((v, dayIndex) => (
+                    <td key={dayIndex} className={`px-1 py-1.5 text-center text-xs border-r border-gray-200 ${row.cls}`}>
                       {v > 0 ? v : <span className="text-gray-300">—</span>}
                     </td>
                   ))}
