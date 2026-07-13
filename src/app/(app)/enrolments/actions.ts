@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db'
 import { enrolments, children, childSessions, emergencyContacts } from '@/lib/db/schema'
-import { eq } from 'drizzle-orm'
+import { eq, and, isNull } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 
 export async function addEnrolment(data: {
@@ -10,6 +10,7 @@ export async function addEnrolment(data: {
   childFirstName: string
   childLastName: string
   dateOfBirth?: string
+  startDate?: string
   parentCarerName: string
   contactPhone?: string
   contactEmail?: string
@@ -21,12 +22,18 @@ export async function addEnrolment(data: {
     childFirstName: data.childFirstName,
     childLastName: data.childLastName,
     dateOfBirth: data.dateOfBirth || null,
+    startDate: data.startDate || null,
     parentCarerName: data.parentCarerName,
     contactPhone: data.contactPhone || null,
     contactEmail: data.contactEmail || null,
     daysSessions: JSON.stringify(data.daysSessions),
     notes: data.notes || null,
   })
+  revalidatePath('/enrolments')
+}
+
+export async function updateEnrolmentStartDate(id: string, startDate: string) {
+  await db.update(enrolments).set({ startDate: startDate || null }).where(eq(enrolments.id, id))
   revalidatePath('/enrolments')
 }
 
@@ -115,4 +122,60 @@ export async function promoteEnrolmentToChild(
   revalidatePath('/admin/keyworkers')
 
   return child.id
+}
+
+export async function bulkPromoteEnrolments(intakeYear: number): Promise<{
+  promoted: number
+  skipped: { name: string; reason: string }[]
+}> {
+  const todayStr = new Date().toISOString().slice(0, 10)
+
+  const candidates = await db
+    .select()
+    .from(enrolments)
+    .where(and(eq(enrolments.intakeYear, intakeYear), isNull(enrolments.promotedChildId)))
+
+  let promoted = 0
+  const skipped: { name: string; reason: string }[] = []
+
+  for (const e of candidates) {
+    const name = `${e.childFirstName} ${e.childLastName}`
+
+    if (e.startDate && e.startDate > todayStr) {
+      skipped.push({ name, reason: `not due to start until ${e.startDate}` })
+      continue
+    }
+    if (!e.dateOfBirth) {
+      skipped.push({ name, reason: 'missing date of birth — promote individually' })
+      continue
+    }
+
+    const daysSessions = e.daysSessions ? (JSON.parse(e.daysSessions) as Record<string, string>) : {}
+    const sessions = Object.entries(daysSessions).map(([day, sessionType]) => ({
+      day, sessionType, isFunded: false,
+    }))
+
+    await promoteEnrolmentToChild(e.id, e.depositPaid, {
+      firstName: e.childFirstName,
+      lastName: e.childLastName,
+      dateOfBirth: e.dateOfBirth,
+      keyWorkerId: e.confirmedKeyworkerId ?? undefined,
+      hasAllergies: false,
+      photoConsent: false,
+      consumableConsent: false,
+      needs1to1: false,
+      sessions,
+      contactName: e.parentCarerName,
+      contactRelationship: 'Parent/Carer',
+      contactPhone: e.contactPhone ?? '',
+      contactEmail: e.contactEmail ?? undefined,
+    })
+    promoted++
+  }
+
+  revalidatePath('/enrolments')
+  revalidatePath('/children')
+  revalidatePath('/admin/keyworkers')
+
+  return { promoted, skipped }
 }

@@ -484,6 +484,7 @@ export const enrolments = pgTable('enrolments', {
   childFirstName: text('child_first_name').notNull(),
   childLastName: text('child_last_name').notNull(),
   dateOfBirth: date('date_of_birth'),
+  startDate: date('start_date'), // if set, when this child is due to start (not necessarily the standard intake date)
   parentCarerName: text('parent_carer_name').notNull(),
   contactPhone: text('contact_phone'),
   contactEmail: text('contact_email'),

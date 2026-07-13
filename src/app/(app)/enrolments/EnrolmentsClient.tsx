@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { addEnrolment, removeEnrolment, updateEnrolmentFee, confirmEnrolmentKeyworker } from './actions'
+import { addEnrolment, removeEnrolment, updateEnrolmentFee, confirmEnrolmentKeyworker, updateEnrolmentStartDate, bulkPromoteEnrolments } from './actions'
 
 function generateEnrolmentInvoiceHTML(child: NewStarter, intakeYear: number): string {
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -122,6 +122,7 @@ type NewStarter = {
   firstName: string
   lastName: string
   dateOfBirth: string | null
+  startDate: string | null
   parentCarerName: string
   contactPhone: string | null
   contactEmail: string | null
@@ -144,6 +145,7 @@ type FormState = {
   childFirstName: string
   childLastName: string
   dateOfBirth: string
+  startDate: string
   parentCarerName: string
   contactPhone: string
   contactEmail: string
@@ -152,7 +154,7 @@ type FormState = {
 }
 
 const EMPTY_FORM: FormState = {
-  childFirstName: '', childLastName: '', dateOfBirth: '',
+  childFirstName: '', childLastName: '', dateOfBirth: '', startDate: '',
   parentCarerName: '', contactPhone: '', contactEmail: '',
   daysSessions: {}, notes: '',
 }
@@ -210,6 +212,10 @@ export default function EnrolmentsClient({
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [confirmingKw, setConfirmingKw] = useState<string | null>(null) // enrolmentId currently being saved
   const [changingKw, setChangingKw] = useState<Set<string>>(new Set()) // enrolmentIds in "change" mode
+  const [editingStartDate, setEditingStartDate] = useState<string | null>(null) // enrolmentId
+  const [startDateDraft, setStartDateDraft] = useState('')
+  const [bulkPromoting, setBulkPromoting] = useState(false)
+  const [bulkResult, setBulkResult] = useState<{ promoted: number; skipped: { name: string; reason: string }[] } | null>(null)
 
   function toggleFormDay(day: string) {
     setForm(f => {
@@ -235,6 +241,7 @@ export default function EnrolmentsClient({
       childFirstName: form.childFirstName,
       childLastName: form.childLastName,
       dateOfBirth: form.dateOfBirth || undefined,
+      startDate: form.startDate || undefined,
       parentCarerName: form.parentCarerName,
       contactPhone: form.contactPhone || undefined,
       contactEmail: form.contactEmail || undefined,
@@ -244,6 +251,22 @@ export default function EnrolmentsClient({
     setForm(EMPTY_FORM)
     setSaving(false)
     setAdding(false)
+  }
+
+  async function handleSaveStartDate(id: string) {
+    await updateEnrolmentStartDate(id, startDateDraft)
+    setEditingStartDate(null)
+  }
+
+  async function handleBulkPromote() {
+    const notYetPromoted = enrichedNew.filter(c => !c.promotedChildId)
+    if (notYetPromoted.length === 0) return
+    if (!confirm(`Promote all ${notYetPromoted.length} not-yet-started new starters to active child profiles now? Anyone with a future start date or missing date of birth will be skipped and can be promoted individually.`)) return
+    setBulkPromoting(true)
+    setBulkResult(null)
+    const result = await bulkPromoteEnrolments(intakeYear)
+    setBulkPromoting(false)
+    setBulkResult(result)
   }
 
   async function handleRemove(id: string, name: string) {
@@ -323,6 +346,15 @@ export default function EnrolmentsClient({
           >
             🖨 Print
           </button>
+          {isAdmin && enrichedNew.some(c => !c.promotedChildId) && (
+            <button
+              onClick={handleBulkPromote}
+              disabled={bulkPromoting}
+              className="px-4 py-2 bg-green-700 hover:bg-green-800 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+            >
+              {bulkPromoting ? 'Promoting…' : '✓ Promote all ready starters'}
+            </button>
+          )}
           {isAdmin && (
             <button
               onClick={() => setAdding(a => !a)}
@@ -333,6 +365,22 @@ export default function EnrolmentsClient({
           )}
         </div>
       </div>
+
+      {bulkResult && (
+        <div className="print:hidden mb-4 bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-800">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <strong>{bulkResult.promoted} child{bulkResult.promoted !== 1 ? 'ren' : ''} promoted</strong> to active profiles.
+              {bulkResult.skipped.length > 0 && (
+                <div className="mt-1.5 text-amber-700">
+                  {bulkResult.skipped.length} skipped: {bulkResult.skipped.map(s => `${s.name} (${s.reason})`).join(', ')}
+                </div>
+              )}
+            </div>
+            <button onClick={() => setBulkResult(null)} className="text-xs text-green-500 hover:text-green-700 shrink-0">Dismiss</button>
+          </div>
+        </div>
+      )}
 
       {/* Print header */}
       <div className="hidden print:flex justify-between items-baseline mb-3">
@@ -373,6 +421,12 @@ export default function EnrolmentsClient({
               <label className="block text-xs text-gray-600 mb-1">Email</label>
               <input type="email" value={form.contactEmail} onChange={e => setForm(f => ({ ...f, contactEmail: e.target.value }))} className={inputCls} />
             </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">
+              Start date <span className="font-normal text-gray-400">(only if different from the standard September intake)</span>
+            </label>
+            <input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className={`${inputCls} max-w-xs`} />
           </div>
 
           {/* Days & sessions picker */}
@@ -504,6 +558,11 @@ export default function EnrolmentsClient({
                         ? <span className="ml-1.5 text-[9px] font-bold bg-green-100 text-green-700 px-1.5 py-0.5 rounded uppercase tracking-wide">Started</span>
                         : <span className="ml-1.5 text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase tracking-wide">New</span>
                       }
+                      {child.startDate && (
+                        <span className="ml-1.5 text-[9px] font-bold bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded uppercase tracking-wide" title={`Starts ${fmtDob(child.startDate)}`}>
+                          Starts {fmtDob(child.startDate)}
+                        </span>
+                      )}
                     </td>
                     <td className={`${td} text-gray-800`}>{child.lastName}</td>
                     <td className={`${td} text-gray-700 whitespace-nowrap`}>
@@ -549,6 +608,33 @@ export default function EnrolmentsClient({
                               <span className="text-gray-900">{child.notes}</span>
                             </div>
                           )}
+                          <div onClick={e => e.stopPropagation()}>
+                            <span className="text-gray-500">Start date: </span>
+                            {editingStartDate === child.id ? (
+                              <span className="inline-flex items-center gap-1.5">
+                                <input
+                                  type="date"
+                                  value={startDateDraft}
+                                  onChange={e => setStartDateDraft(e.target.value)}
+                                  className="border border-gray-300 rounded px-1.5 py-0.5 text-xs text-gray-900 bg-white"
+                                />
+                                <button onClick={() => handleSaveStartDate(child.id)} className="text-blue-700 hover:underline">Save</button>
+                                <button onClick={() => setEditingStartDate(null)} className="text-gray-400 hover:text-gray-600">Cancel</button>
+                              </span>
+                            ) : (
+                              <span className="text-gray-900">
+                                {child.startDate ? fmtDob(child.startDate) : 'Standard September intake'}
+                                {isAdmin && (
+                                  <button
+                                    onClick={() => { setEditingStartDate(child.id); setStartDateDraft(child.startDate ?? '') }}
+                                    className="ml-1.5 text-blue-700 hover:underline"
+                                  >
+                                    Edit
+                                  </button>
+                                )}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Fees */}

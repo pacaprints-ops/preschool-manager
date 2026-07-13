@@ -42,6 +42,7 @@ export default async function EnrolmentsPage() {
     firstName: e.childFirstName,
     lastName: e.childLastName,
     dateOfBirth: e.dateOfBirth ?? null,
+    startDate: e.startDate ?? null,
     parentCarerName: e.parentCarerName,
     contactPhone: e.contactPhone ?? null,
     contactEmail: e.contactEmail ?? null,
