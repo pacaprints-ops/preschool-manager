@@ -256,198 +256,7 @@ export default function InvoicingClient({
   return (
     <div className="space-y-4">
 
-      {/* Late pickup fees */}
-      {lateFees.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-700">Late pickup fees</h3>
-            <span className="text-xs text-gray-400">{lateFees.filter(f => f.fee.status === 'unpaid').length} unpaid</span>
-          </div>
-          <div className="divide-y divide-gray-100">
-            {lateFees.map(({ fee, child }) => (
-              <div key={fee.id} className={`px-4 py-3 ${fee.status !== 'unpaid' ? 'opacity-60' : ''}`}>
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <span className="font-medium text-gray-900 text-sm">{child.firstName} {child.lastName}</span>
-                    <span className="text-xs text-gray-500 ml-2">
-                      {new Date(fee.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                      {' — '}signed out {new Date(fee.signedOutAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-                      {' · '}{fee.minutesLate} min late
-                    </span>
-                    {fee.status === 'waived' && (
-                      <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">
-                        Waived{fee.notes ? ` — ${fee.notes}` : ''}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-gray-900">£{parseFloat(fee.totalAmount).toFixed(2)}</span>
-                    {fee.status === 'unpaid' && (
-                      <>
-                        {child.parentEmail ? (
-                          <button
-                            onClick={() => handleSendLateFee(fee.id)}
-                            disabled={sendingLateFeeId === fee.id}
-                            className="text-xs text-indigo-700 hover:text-indigo-900 font-medium disabled:opacity-50"
-                          >
-                            {sendingLateFeeId === fee.id ? 'Sending…' : 'Send'}
-                          </button>
-                        ) : (
-                          <span className="text-xs text-gray-300" title="No email for this child">No email</span>
-                        )}
-                        <button onClick={() => markLateFeePaid(fee.id)} className="text-xs text-green-600 hover:text-green-700 font-medium">Mark paid</button>
-                        <button
-                          onClick={() => { setWaivingFeeId(fee.id); setWaiveReason('') }}
-                          className="text-xs text-amber-600 hover:text-amber-700 font-medium"
-                        >
-                          Waive
-                        </button>
-                      </>
-                    )}
-                    {fee.status === 'paid' && (
-                      <button onClick={() => markLateFeeUnpaid(fee.id)} className="text-xs text-gray-400 hover:text-gray-600">Unpaid</button>
-                    )}
-                    {fee.status === 'waived' && (
-                      <button onClick={() => markLateFeeUnpaid(fee.id)} className="text-xs text-gray-400 hover:text-gray-600">Undo waive</button>
-                    )}
-                    <button onClick={() => deleteLateFee(fee.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
-                  </div>
-                </div>
-
-                {/* Inline waive form */}
-                {waivingFeeId === fee.id && (
-                  <div className="mt-2 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                    <input
-                      autoFocus
-                      value={waiveReason}
-                      onChange={e => setWaiveReason(e.target.value)}
-                      placeholder="Reason (optional — e.g. parent called ahead)"
-                      className="flex-1 text-xs bg-transparent outline-none text-gray-700 placeholder-gray-400"
-                    />
-                    <button
-                      onClick={async () => {
-                        await waiveLateFee(fee.id, waiveReason.trim() || undefined)
-                        setWaivingFeeId(null)
-                        setWaiveReason('')
-                      }}
-                      className="text-xs font-medium text-amber-700 hover:text-amber-900 whitespace-nowrap"
-                    >
-                      Confirm waive
-                    </button>
-                    <button
-                      onClick={() => { setWaivingFeeId(null); setWaiveReason('') }}
-                      className="text-xs text-gray-400 hover:text-gray-600"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Extra one-off sessions */}
-      {extraSessions.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-700">Extra one-off sessions</h3>
-            <span className="text-xs text-gray-400">{extraSessions.filter(e => e.session.status === 'unpaid').length} unpaid</span>
-          </div>
-          <div className="divide-y divide-gray-100">
-            {extraSessions.map(({ session: es, child }) => (
-              <div key={es.id} className={`px-4 py-3 ${es.status !== 'unpaid' ? 'opacity-60' : ''}`}>
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <span className="font-medium text-gray-900 text-sm">{child.firstName} {child.lastName}</span>
-                    <span className="text-xs text-gray-500 ml-2">
-                      {new Date(es.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                      {' — '}{SESSION_TYPE_LABEL[es.sessionType] ?? es.sessionType}
-                      {es.isFunded && ' · funded'}
-                    </span>
-                    {es.status === 'waived' && (
-                      <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">
-                        Waived{es.notes ? ` — ${es.notes}` : ''}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-gray-900">£{parseFloat(es.amount).toFixed(2)}</span>
-                    {es.status === 'unpaid' && (
-                      <>
-                        <button onClick={() => markExtraSessionPaid(es.id)} className="text-xs text-green-600 hover:text-green-700 font-medium">Mark paid</button>
-                        <button
-                          onClick={() => { setWaivingExtraId(es.id); setExtraWaiveReason('') }}
-                          className="text-xs text-amber-600 hover:text-amber-700 font-medium"
-                        >
-                          Waive
-                        </button>
-                      </>
-                    )}
-                    {es.status === 'paid' && (
-                      <button onClick={() => markExtraSessionUnpaid(es.id)} className="text-xs text-gray-400 hover:text-gray-600">Unpaid</button>
-                    )}
-                    {es.status === 'waived' && (
-                      <button onClick={() => markExtraSessionUnpaid(es.id)} className="text-xs text-gray-400 hover:text-gray-600">Undo waive</button>
-                    )}
-                    <button onClick={() => deleteExtraSession(es.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
-                  </div>
-                </div>
-
-                {waivingExtraId === es.id && (
-                  <div className="mt-2 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                    <input
-                      autoFocus
-                      value={extraWaiveReason}
-                      onChange={e => setExtraWaiveReason(e.target.value)}
-                      placeholder="Reason (optional)"
-                      className="flex-1 text-xs bg-transparent outline-none text-gray-700 placeholder-gray-400"
-                    />
-                    <button
-                      onClick={async () => {
-                        await waiveExtraSession(es.id, extraWaiveReason.trim() || undefined)
-                        setWaivingExtraId(null)
-                        setExtraWaiveReason('')
-                      }}
-                      className="text-xs font-medium text-amber-700 hover:text-amber-900 whitespace-nowrap"
-                    >
-                      Confirm waive
-                    </button>
-                    <button
-                      onClick={() => { setWaivingExtraId(null); setExtraWaiveReason('') }}
-                      className="text-xs text-gray-400 hover:text-gray-600"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Outstanding balances summary */}
-      {unpaidChildren.length > 0 && (
-        <div className="bg-amber-50 border border-amber-300 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-amber-800">Outstanding balances</h3>
-            <span className="text-sm font-bold text-amber-900">£{totalOutstanding.toFixed(2)} total</span>
-          </div>
-          <div className="space-y-1.5">
-            {unpaidChildren.map(({ child, total, terms: termNames }) => (
-              <div key={child.id} className="flex items-center justify-between text-sm">
-                <div>
-                  <span className="font-medium text-gray-900">{child.firstName} {child.lastName}</span>
-                  <span className="text-xs text-gray-500 ml-2">{termNames.join(', ')}</span>
-                </div>
-                <span className="font-semibold text-amber-800">£{total.toFixed(2)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* ── Term & invoices ─────────────────────────────────────────────── */}
 
       {/* Term selector + generate */}
       <div className="flex items-center gap-3 flex-wrap">
@@ -506,7 +315,7 @@ export default function InvoicingClient({
         </div>
       )}
 
-      {/* Stats + funding claims */}
+      {/* Stats + funding claims + invoice table for the selected term */}
       {termInvoices.length > 0 && (
         <>
           <div className="grid grid-cols-3 gap-3">
@@ -751,6 +560,208 @@ export default function InvoicingClient({
           </div>
         </div>
       )}
+
+      {/* ── Across all terms ────────────────────────────────────────────── */}
+      {unpaidChildren.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 mt-2">Across all terms</p>
+          <div className="bg-amber-50 border border-amber-300 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-amber-800">Outstanding balances</h3>
+              <span className="text-sm font-bold text-amber-900">£{totalOutstanding.toFixed(2)} total</span>
+            </div>
+            <div className="space-y-1.5">
+              {unpaidChildren.map(({ child, total, terms: termNames }) => (
+                <div key={child.id} className="flex items-center justify-between text-sm">
+                  <div>
+                    <span className="font-medium text-gray-900">{child.firstName} {child.lastName}</span>
+                    <span className="text-xs text-gray-500 ml-2">{termNames.join(', ')}</span>
+                  </div>
+                  <span className="font-semibold text-amber-800">£{total.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Other charges (not term invoices) ───────────────────────────── */}
+      {(lateFees.length > 0 || extraSessions.length > 0) && (
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 mt-2">Other charges</p>
+      )}
+
+      {/* Late pickup fees */}
+      {lateFees.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-700">Late pickup fees</h3>
+            <span className="text-xs text-gray-400">{lateFees.filter(f => f.fee.status === 'unpaid').length} unpaid</span>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {lateFees.map(({ fee, child }) => (
+              <div key={fee.id} className={`px-4 py-3 ${fee.status !== 'unpaid' ? 'opacity-60' : ''}`}>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium text-gray-900 text-sm">{child.firstName} {child.lastName}</span>
+                    <span className="text-xs text-gray-500 ml-2">
+                      {new Date(fee.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                      {' — '}signed out {new Date(fee.signedOutAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                      {' · '}{fee.minutesLate} min late
+                    </span>
+                    {fee.status === 'waived' && (
+                      <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">
+                        Waived{fee.notes ? ` — ${fee.notes}` : ''}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-gray-900">£{parseFloat(fee.totalAmount).toFixed(2)}</span>
+                    {fee.status === 'unpaid' && (
+                      <>
+                        {child.parentEmail ? (
+                          <button
+                            onClick={() => handleSendLateFee(fee.id)}
+                            disabled={sendingLateFeeId === fee.id}
+                            className="text-xs text-indigo-700 hover:text-indigo-900 font-medium disabled:opacity-50"
+                          >
+                            {sendingLateFeeId === fee.id ? 'Sending…' : 'Send'}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-300" title="No email for this child">No email</span>
+                        )}
+                        <button onClick={() => markLateFeePaid(fee.id)} className="text-xs text-green-600 hover:text-green-700 font-medium">Mark paid</button>
+                        <button
+                          onClick={() => { setWaivingFeeId(fee.id); setWaiveReason('') }}
+                          className="text-xs text-amber-600 hover:text-amber-700 font-medium"
+                        >
+                          Waive
+                        </button>
+                      </>
+                    )}
+                    {fee.status === 'paid' && (
+                      <button onClick={() => markLateFeeUnpaid(fee.id)} className="text-xs text-gray-400 hover:text-gray-600">Unpaid</button>
+                    )}
+                    {fee.status === 'waived' && (
+                      <button onClick={() => markLateFeeUnpaid(fee.id)} className="text-xs text-gray-400 hover:text-gray-600">Undo waive</button>
+                    )}
+                    <button onClick={() => deleteLateFee(fee.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
+                  </div>
+                </div>
+
+                {/* Inline waive form */}
+                {waivingFeeId === fee.id && (
+                  <div className="mt-2 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    <input
+                      autoFocus
+                      value={waiveReason}
+                      onChange={e => setWaiveReason(e.target.value)}
+                      placeholder="Reason (optional — e.g. parent called ahead)"
+                      className="flex-1 text-xs bg-transparent outline-none text-gray-700 placeholder-gray-400"
+                    />
+                    <button
+                      onClick={async () => {
+                        await waiveLateFee(fee.id, waiveReason.trim() || undefined)
+                        setWaivingFeeId(null)
+                        setWaiveReason('')
+                      }}
+                      className="text-xs font-medium text-amber-700 hover:text-amber-900 whitespace-nowrap"
+                    >
+                      Confirm waive
+                    </button>
+                    <button
+                      onClick={() => { setWaivingFeeId(null); setWaiveReason('') }}
+                      className="text-xs text-gray-400 hover:text-gray-600"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Extra one-off sessions */}
+      {extraSessions.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-700">Extra one-off sessions</h3>
+            <span className="text-xs text-gray-400">{extraSessions.filter(e => e.session.status === 'unpaid').length} unpaid</span>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {extraSessions.map(({ session: es, child }) => (
+              <div key={es.id} className={`px-4 py-3 ${es.status !== 'unpaid' ? 'opacity-60' : ''}`}>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium text-gray-900 text-sm">{child.firstName} {child.lastName}</span>
+                    <span className="text-xs text-gray-500 ml-2">
+                      {new Date(es.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                      {' — '}{SESSION_TYPE_LABEL[es.sessionType] ?? es.sessionType}
+                      {es.isFunded && ' · funded'}
+                    </span>
+                    {es.status === 'waived' && (
+                      <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">
+                        Waived{es.notes ? ` — ${es.notes}` : ''}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-gray-900">£{parseFloat(es.amount).toFixed(2)}</span>
+                    {es.status === 'unpaid' && (
+                      <>
+                        <button onClick={() => markExtraSessionPaid(es.id)} className="text-xs text-green-600 hover:text-green-700 font-medium">Mark paid</button>
+                        <button
+                          onClick={() => { setWaivingExtraId(es.id); setExtraWaiveReason('') }}
+                          className="text-xs text-amber-600 hover:text-amber-700 font-medium"
+                        >
+                          Waive
+                        </button>
+                      </>
+                    )}
+                    {es.status === 'paid' && (
+                      <button onClick={() => markExtraSessionUnpaid(es.id)} className="text-xs text-gray-400 hover:text-gray-600">Unpaid</button>
+                    )}
+                    {es.status === 'waived' && (
+                      <button onClick={() => markExtraSessionUnpaid(es.id)} className="text-xs text-gray-400 hover:text-gray-600">Undo waive</button>
+                    )}
+                    <button onClick={() => deleteExtraSession(es.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
+                  </div>
+                </div>
+
+                {waivingExtraId === es.id && (
+                  <div className="mt-2 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    <input
+                      autoFocus
+                      value={extraWaiveReason}
+                      onChange={e => setExtraWaiveReason(e.target.value)}
+                      placeholder="Reason (optional)"
+                      className="flex-1 text-xs bg-transparent outline-none text-gray-700 placeholder-gray-400"
+                    />
+                    <button
+                      onClick={async () => {
+                        await waiveExtraSession(es.id, extraWaiveReason.trim() || undefined)
+                        setWaivingExtraId(null)
+                        setExtraWaiveReason('')
+                      }}
+                      className="text-xs font-medium text-amber-700 hover:text-amber-900 whitespace-nowrap"
+                    >
+                      Confirm waive
+                    </button>
+                    <button
+                      onClick={() => { setWaivingExtraId(null); setExtraWaiveReason('') }}
+                      className="text-xs text-gray-400 hover:text-gray-600"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
