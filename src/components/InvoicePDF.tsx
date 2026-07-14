@@ -92,7 +92,9 @@ function fmtDate(d: string) {
   return new Date(d + 'T12:00:00').toLocaleDateString('en-GB')
 }
 
-export function InvoicePDF({ data }: { data: InvoicePDFData }) {
+// A single invoice's page content, reusable standalone (one PDF per invoice)
+// or stacked inside one <Document> for bulk term/year downloads.
+export function InvoicePage({ data }: { data: InvoicePDFData }) {
   const rows = [
     {
       label: `${data.fundedHoursPerWeek}h Early Education Funding per week`,
@@ -129,7 +131,6 @@ export function InvoicePDF({ data }: { data: InvoicePDFData }) {
   ]
 
   return (
-    <Document>
       <Page size="A4" style={s.page}>
 
         {/* Header */}
@@ -232,6 +233,13 @@ export function InvoicePDF({ data }: { data: InvoicePDFData }) {
         </View>
 
       </Page>
+  )
+}
+
+export function InvoicePDF({ data }: { data: InvoicePDFData }) {
+  return (
+    <Document>
+      <InvoicePage data={data} />
     </Document>
   )
 }

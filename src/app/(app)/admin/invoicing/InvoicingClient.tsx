@@ -273,6 +273,45 @@ export default function InvoicingClient({
         </button>
       </div>
 
+      {/* Invoice log — bulk PDF download by term or whole academic year */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <h3 className="text-sm font-semibold text-gray-700 mb-1">Invoice log</h3>
+        <p className="text-xs text-gray-500 mb-3">Download every generated invoice for a term, or a whole school year, as one PDF.</p>
+        <div className="flex flex-wrap gap-2">
+          <a
+            href={selectedTerm ? `/api/invoice/bulk/pdf?termId=${selectedTerm}` : undefined}
+            target="_blank"
+            rel="noreferrer"
+            aria-disabled={!selectedTerm || termInvoices.length === 0}
+            className={`text-xs px-3 py-2 rounded-lg border font-medium transition-colors ${
+              selectedTerm && termInvoices.length > 0
+                ? 'text-blue-700 border-blue-200 hover:bg-blue-50'
+                : 'text-gray-300 border-gray-200 pointer-events-none'
+            }`}
+          >
+            📥 Download {terms.find(t => t.id === selectedTerm)?.name ?? 'selected term'} ({termInvoices.length} invoice{termInvoices.length !== 1 ? 's' : ''})
+          </a>
+          {[...new Set(terms.map(t => t.academicYear))].map(year => {
+            const count = invoices.filter(i => terms.find(t => t.id === i.invoice.termId)?.academicYear === year).length
+            return (
+              <a
+                key={year}
+                href={count > 0 ? `/api/invoice/bulk/pdf?academicYear=${encodeURIComponent(year)}` : undefined}
+                target="_blank"
+                rel="noreferrer"
+                className={`text-xs px-3 py-2 rounded-lg border font-medium transition-colors ${
+                  count > 0
+                    ? 'text-blue-700 border-blue-200 hover:bg-blue-50'
+                    : 'text-gray-300 border-gray-200 pointer-events-none'
+                }`}
+              >
+                📥 Download whole {year} year ({count} invoice{count !== 1 ? 's' : ''})
+              </a>
+            )
+          })}
+        </div>
+      </div>
+
       {/* Child selection */}
       {selectedTerm && (
         <div className="bg-white rounded-xl border border-gray-200 p-4">
