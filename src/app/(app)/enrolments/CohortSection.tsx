@@ -218,6 +218,7 @@ export default function CohortSection({
   const [confirmingKw, setConfirmingKw] = useState<string | null>(null)
   const [changingKw, setChangingKw] = useState<Set<string>>(new Set())
   const [kwOpen, setKwOpen] = useState<Set<string>>(new Set())
+  const [revealedId, setRevealedId] = useState<string | null>(null)
   const [bulkPromoting, setBulkPromoting] = useState(false)
   const [bulkResult, setBulkResult] = useState<{ promoted: number; skipped: { name: string; reason: string }[] } | null>(null)
   const [archivingLeavers, setArchivingLeavers] = useState(false)
@@ -310,8 +311,8 @@ export default function CohortSection({
         {totalCount} children · {enrichedReturning.length} returning · {enrichedNew.length} new
       </p>
 
-      {/* Promote-all banner — clear call to action, not buried in the header */}
-      {isAdmin && enrichedNew.some(c => !c.promotedChildId) && (
+      {/* Promote-all banner — only ever on the nearest September, never future years */}
+      {isAdmin && accentIndex === 0 && enrichedNew.some(c => !c.promotedChildId) && (
         <div className="print:hidden mb-4 flex items-center justify-between gap-3 flex-wrap bg-green-50 border border-green-200 rounded-lg px-4 py-3">
           <div>
             <p className="text-sm font-semibold text-green-800">Ready to move new starters into active profiles?</p>
@@ -501,7 +502,13 @@ export default function CohortSection({
                   <tr className="border-b border-gray-100 even:bg-gray-50/40">
                     <td className={`${td} text-center text-gray-400 font-medium`}>{rowNum}</td>
                     <td className={`${td} font-semibold text-gray-900`}>
-                      <span>{child.firstName}</span>
+                      <button
+                        type="button"
+                        onClick={() => setRevealedId(revealedId === child.id ? null : child.id)}
+                        className="hover:underline decoration-dotted underline-offset-2"
+                      >
+                        {child.firstName}
+                      </button>
                       {child.promotedChildId
                         ? <span className="ml-1.5 text-[9px] font-bold bg-green-100 text-green-700 px-1.5 py-0.5 rounded uppercase tracking-wide">Started</span>
                         : <span className="ml-1.5 text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase tracking-wide">New</span>
@@ -530,7 +537,8 @@ export default function CohortSection({
                     </td>
                   </tr>
 
-                  {/* Slim action row — always visible, no click-to-expand */}
+                  {/* Slim action row — only shown once the child's name is clicked */}
+                  {revealedId === child.id && (
                   <tr className="border-b border-gray-100 bg-gray-50/60 print:hidden">
                     <td colSpan={10} className="px-4 py-2.5">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -660,6 +668,7 @@ export default function CohortSection({
                       )}
                     </td>
                   </tr>
+                  )}
                 </React.Fragment>
               )
             })}
