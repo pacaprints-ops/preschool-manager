@@ -204,12 +204,8 @@ export async function applyConsumableWaiver(
     .where(eq(invoices.termId, termId))
 
   let candidateChildIds: string[]
-  let nameById = new Map<string, string>()
   if (scope.mode === 'selected') {
     candidateChildIds = scope.childIds
-    const rows = await db.select({ id: children.id, firstName: children.firstName, lastName: children.lastName })
-      .from(children).where(inArray(children.id, scope.childIds))
-    nameById = new Map(rows.map(c => [c.id, `${c.firstName} ${c.lastName}`]))
   } else {
     const sessionsOnDay = await db
       .select({ childId: childSessions.childId })
@@ -218,6 +214,12 @@ export async function applyConsumableWaiver(
     candidateChildIds = [...new Set(sessionsOnDay.map(s => s.childId))]
   }
 
+  const nameRows = candidateChildIds.length > 0
+    ? await db.select({ id: children.id, firstName: children.firstName, lastName: children.lastName })
+        .from(children).where(inArray(children.id, candidateChildIds))
+    : []
+  const nameById = new Map(nameRows.map(c => [c.id, `${c.firstName} ${c.lastName}`]))
+
   const affectedNames: string[] = []
   const skippedNoInvoice: string[] = []
   const skippedNoConsent: string[] = []
@@ -225,7 +227,7 @@ export async function applyConsumableWaiver(
   for (const childId of candidateChildIds) {
     const row = termInvoices.find(r => r.child.id === childId)
     if (!row) {
-      if (scope.mode === 'selected') skippedNoInvoice.push(nameById.get(childId) ?? childId)
+      skippedNoInvoice.push(nameById.get(childId) ?? childId)
       continue
     }
     const { invoice: inv, child } = row

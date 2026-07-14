@@ -395,12 +395,16 @@ export default function InvoicingClient({
 
             {waiverResult && (
               <div className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-3">
-                <p className="text-green-700 font-medium">✓ Waived for {waiverResult.affected} invoice{waiverResult.affected !== 1 ? 's' : ''}.</p>
+                {waiverResult.affected > 0 ? (
+                  <p className="text-green-700 font-medium">✓ Waived for {waiverResult.affected} invoice{waiverResult.affected !== 1 ? 's' : ''}.</p>
+                ) : (
+                  <p className="text-amber-700 font-medium">Nothing was waived.</p>
+                )}
                 {waiverResult.skippedNoConsent.length > 0 && (
                   <p className="mt-1">Skipped (no consumable consent): {waiverResult.skippedNoConsent.join(', ')}</p>
                 )}
                 {waiverResult.skippedNoInvoice.length > 0 && (
-                  <p className="mt-1">Skipped (no invoice generated for this term yet): {waiverResult.skippedNoInvoice.join(', ')}</p>
+                  <p className="mt-1">Skipped — no invoice generated for this term yet: {waiverResult.skippedNoInvoice.join(', ')}. Generate invoices for this term first, then apply the waiver.</p>
                 )}
               </div>
             )}
