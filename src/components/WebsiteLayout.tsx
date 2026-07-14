@@ -22,7 +22,7 @@ function WebsiteHeader() {
           </Link>
 
           {/* Nav links */}
-          <nav className="hidden md:flex items-center gap-0.5 flex-1">
+          <nav className="hidden lg:flex items-center gap-0.5 flex-1">
             {[
               { href: '/', label: 'Home' },
               { href: '/about', label: 'About Us' },
@@ -31,24 +31,15 @@ function WebsiteHeader() {
               { href: '/policies', label: 'Policies' },
             ].map(link => (
               <Link key={link.href} href={link.href}
-                className="px-4 py-2 rounded text-base font-semibold text-white/80 hover:text-white hover:bg-white/10 transition-colors whitespace-nowrap">
+                className="px-3 py-2 rounded text-base font-semibold text-white/80 hover:text-white hover:bg-white/10 transition-colors whitespace-nowrap">
                 {link.label}
               </Link>
             ))}
           </nav>
 
-          {/* Contact + staff login */}
-          <div className="hidden md:flex items-center gap-4 text-base shrink-0">
-            <a href="tel:07305240440"
-              className="flex items-center gap-1.5 text-white/80 hover:text-white transition-colors whitespace-nowrap font-medium">
-              📞 07305 240440
-            </a>
-            <a href="mailto:info@wintonpreschool.org.uk"
-              className="flex items-center gap-1.5 text-white/80 hover:text-white transition-colors whitespace-nowrap font-medium">
-              ✉️ info@wintonpreschool.org.uk
-            </a>
-            <div className="w-px h-4 bg-white/20" />
-            <Link href="/login" className="text-sm text-white/40 hover:text-white/70 transition-colors">
+          {/* Staff login */}
+          <div className="hidden lg:flex items-center shrink-0">
+            <Link href="/login" className="text-sm text-white/40 hover:text-white/70 transition-colors whitespace-nowrap">
               Staff login
             </Link>
           </div>

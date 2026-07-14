@@ -13,7 +13,7 @@ const links = [
 export default function MobileNav() {
   const [open, setOpen] = useState(false)
   return (
-    <div className="md:hidden ml-auto">
+    <div className="lg:hidden ml-auto">
       <button
         onClick={() => setOpen(!open)}
         aria-label="Menu"
@@ -32,9 +32,14 @@ export default function MobileNav() {
           <a href="tel:07305240440" className="block px-6 py-4 text-white/70 text-base border-b border-white/10">
             📞 07305 240440
           </a>
-          <a href="mailto:info@wintonpreschool.org.uk" className="block px-6 py-4 text-white/70 text-base">
+          <a href="mailto:info@wintonpreschool.org.uk" className="block px-6 py-4 text-white/70 text-base border-b border-white/10">
             ✉️ info@wintonpreschool.org.uk
           </a>
+          <Link href="/login"
+            onClick={() => setOpen(false)}
+            className="block px-6 py-4 text-white/50 text-base font-semibold">
+            🔒 Staff login
+          </Link>
         </div>
       )}
     </div>
