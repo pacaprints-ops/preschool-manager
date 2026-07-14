@@ -137,6 +137,7 @@ export default function InvoicingClient({
   const [applyingWaiver, setApplyingWaiver] = useState(false)
   const [waiverResult, setWaiverResult] = useState<{ affected: number; skippedNoInvoice: string[]; skippedNoConsent: string[] } | null>(null)
   const [lateFeesOpen, setLateFeesOpen] = useState(false)
+  const [invoiceTableOpen, setInvoiceTableOpen] = useState(false)
   const unpaidLateFeesCount = lateFees.filter(f => f.fee.status === 'unpaid').length
 
   async function handleApplyWaiver() {
@@ -155,7 +156,9 @@ export default function InvoicingClient({
     setWaiverResult(result)
   }
 
-  const termInvoices = invoices.filter(i => i.invoice.termId === selectedTerm)
+  const termInvoices = invoices
+    .filter(i => i.invoice.termId === selectedTerm)
+    .sort((a, b) => a.child.lastName.localeCompare(b.child.lastName) || a.child.firstName.localeCompare(b.child.firstName))
   const totalDue = termInvoices.reduce((sum, i) => sum + parseFloat(i.invoice.amountDue), 0)
 
   const termInvoiceIds = new Set(termInvoices.map(i => i.invoice.id))
@@ -274,7 +277,7 @@ export default function InvoicingClient({
         <strong>Order of operations:</strong> pick a term and generate invoices first — the consumable fee waiver and reminders below only work on invoices that already exist.
       </div>
 
-      {/* Term selector + generate */}
+      {/* Term selector + generate + reminders */}
       <div className="flex items-center gap-3 flex-wrap">
         <select value={selectedTerm} onChange={e => setSelectedTerm(e.target.value)} className={input}>
           <option value="">— Select term —</option>
@@ -287,7 +290,20 @@ export default function InvoicingClient({
         >
           {generating ? 'Generating…' : 'Generate invoices'}
         </button>
+        <button
+          onClick={handleSendReminders}
+          disabled={sendingReminders || !selectedTerm || termInvoices.length === 0}
+          className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:border-gray-400 hover:bg-gray-50 disabled:opacity-50"
+        >
+          {sendingReminders ? 'Sending…' : 'Send 3-day reminders'}
+        </button>
+        {remindersSent !== null && (
+          <span className="text-sm text-green-600">{remindersSent} reminder{remindersSent !== 1 ? 's' : ''} sent</span>
+        )}
       </div>
+      <p className="text-xs text-gray-400 -mt-2">
+        Emails anyone whose invoice was sent (or last reminded) 3+ days ago and still isn&apos;t marked paid — safe to click any time, it only ever reminds each parent once every 3 days.
+      </p>
 
       {terms.length === 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900">
@@ -350,23 +366,25 @@ export default function InvoicingClient({
             </div>
           </div>
 
-          {/* 3-day reminder button */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleSendReminders}
-              disabled={sendingReminders}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:border-gray-400 hover:bg-gray-50 disabled:opacity-50"
-            >
-              {sendingReminders ? 'Sending…' : 'Send 3-day reminders'}
-            </button>
-            {remindersSent !== null && (
-              <span className="text-sm text-green-600">{remindersSent} reminder{remindersSent !== 1 ? 's' : ''} sent</span>
-            )}
-          </div>
 
           {/* Funding claims summary */}
           <FundingClaimsPanel termInvoices={termInvoices} sessionConfigs={sessionConfigs} />
 
+          {/* Per-child invoices — collapsible, alphabetical by surname, since it can get long */}
+          <button
+            type="button"
+            onClick={() => setInvoiceTableOpen(o => !o)}
+            className="w-full bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50"
+          >
+            <h3 className="text-sm font-semibold text-gray-700">
+              Children &amp; invoices
+              <span className="ml-2 text-xs font-normal text-gray-400">{termInvoices.length} · A–Z by surname</span>
+            </h3>
+            <span className={`text-gray-400 transition-transform ${invoiceTableOpen ? 'rotate-180' : ''}`}>▾</span>
+          </button>
+
+          {invoiceTableOpen && (
+          <>
           {/* Mobile/tablet cards */}
           <div className="lg:hidden space-y-3">
             {termInvoices.map(({ invoice: inv, child }) => (
@@ -538,6 +556,8 @@ export default function InvoicingClient({
               </tbody>
             </table>
           </div>
+          </>
+          )}
         </>
       )}
 
