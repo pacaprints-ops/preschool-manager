@@ -132,6 +132,61 @@ export function buildInvoiceEmail(data: InvoiceEmailData): string {
   return layout(content)
 }
 
+// ─── Enrolment invoice email ────────────────────────────────────────────────────
+
+type EnrolmentInvoiceEmailData = {
+  childName: string
+  intakeYear: number
+  welcomeFeePaid: boolean
+  depositPaid: boolean
+}
+
+export function buildEnrolmentInvoiceEmail(data: EnrolmentInvoiceEmailData): string {
+  const welcomeAmt = 50
+  const depositAmt = 50
+  const total = (!data.welcomeFeePaid ? welcomeAmt : 0) + (!data.depositPaid ? depositAmt : 0)
+
+  const rows: string[] = []
+  if (!data.welcomeFeePaid) {
+    rows.push(`<tr>
+      <td style="padding:8px 0;color:#374151;border-bottom:1px solid #f3f4f6">Welcome Fee<br><span style="font-size:12px;color:#6b7280">3 settle-in sessions, home visit &amp; polo shirt · non-refundable</span></td>
+      <td style="padding:8px 0;text-align:right;color:#374151;border-bottom:1px solid #f3f4f6">£${welcomeAmt.toFixed(2)}</td>
+    </tr>`)
+  }
+  if (!data.depositPaid) {
+    rows.push(`<tr>
+      <td style="padding:8px 0;color:#374151;border-bottom:1px solid #f3f4f6">Term Deposit<br><span style="font-size:12px;color:#6b7280">Paid in advance · deducted from your first term invoice</span></td>
+      <td style="padding:8px 0;text-align:right;color:#374151;border-bottom:1px solid #f3f4f6">£${depositAmt.toFixed(2)}</td>
+    </tr>`)
+  }
+
+  const content = `
+    <p style="margin:0 0 4px;font-size:14px;color:#6b7280">Enrolment Invoice · September ${data.intakeYear}</p>
+    <h1 style="margin:0 0 24px;font-size:22px;color:#020e2f">${data.childName}</h1>
+
+    <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
+      ${rows.join('') || '<tr><td style="padding:8px 0;color:#16a34a">All fees paid — nothing due.</td></tr>'}
+      ${rows.length > 0 ? `<tr>
+        <td style="padding:12px 0 4px;font-weight:bold;font-size:16px;color:#020e2f">Total due</td>
+        <td style="padding:12px 0 4px;text-align:right;font-weight:bold;font-size:20px;color:#020e2f">£${total.toFixed(2)}</td>
+      </tr>` : ''}
+    </table>
+
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:16px;margin-bottom:20px">
+      <p style="margin:0 0 4px;font-weight:bold;color:#15803d;font-size:14px">Payment by BACS</p>
+      <p style="margin:0;color:#166534;font-size:13px">
+        Account name: Winton Pre-School<br>
+        Sort code: 30-96-26<br>
+        Account number: 62413268<br>
+        Reference: <strong>${data.childName.replace(' ', '')}</strong>
+      </p>
+    </div>
+
+    <p style="color:#6b7280;font-size:13px;margin:0">Please make payment by bank transfer and quote your child's name as the reference. If you have any questions, please speak to a member of staff.</p>
+  `
+  return layout(content)
+}
+
 // ─── Late fee email ────────────────────────────────────────────────────────────
 
 type LateFeeEmailData = {

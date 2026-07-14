@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { enrolments, children, childSessions, emergencyContacts, medications, enrolmentPolicySignatures } from '@/lib/db/schema'
 import { eq, and, isNull } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
+import { buildEnrolmentInvoiceEmail, sendEmail } from '@/lib/email'
 
 export type AddEnrolmentData = {
   intakeYear: number
@@ -186,6 +187,86 @@ export async function addEnrolment(data: AddEnrolmentData): Promise<string> {
   return row.id
 }
 
+export type UpdateEnrolmentData = Omit<
+  AddEnrolmentData,
+  'intakeYear' | 'policySignatures' | 'policiesManagerName' | 'welcomePackGivenAt' | 'tshirtGivenAt' | 'settlingSession1' | 'settlingSession2' | 'settlingSession3'
+>
+
+export async function updateEnrolmentFull(id: string, data: UpdateEnrolmentData) {
+  await db.update(enrolments).set({
+    childFirstName: data.childFirstName,
+    childLastName: data.childLastName,
+    childGender: data.childGender || null,
+    dateOfBirth: data.dateOfBirth || null,
+    childAddress: data.childAddress || null,
+    childPostcode: data.childPostcode || null,
+    birthCertificateSeen: data.birthCertificateSeen ?? false,
+    startDate: data.startDate || null,
+    parentCarerName: data.parent1Name,
+    contactPhone: data.parent1Mobile || data.parent1DaytimePhone || null,
+    contactEmail: data.parent1Email || null,
+    parent1Name: data.parent1Name || null,
+    parent1DaytimePhone: data.parent1DaytimePhone || null,
+    parent1Mobile: data.parent1Mobile || null,
+    parent1Email: data.parent1Email || null,
+    parent1Relationship: data.parent1Relationship || null,
+    parent1ParentalResponsibility: data.parent1ParentalResponsibility ?? false,
+    parent2Name: data.parent2Name || null,
+    parent2DaytimePhone: data.parent2DaytimePhone || null,
+    parent2Mobile: data.parent2Mobile || null,
+    parent2Email: data.parent2Email || null,
+    parent2Relationship: data.parent2Relationship || null,
+    parent2ParentalResponsibility: data.parent2ParentalResponsibility ?? false,
+    ec1Name: data.ec1Name || null,
+    ec1DaytimePhone: data.ec1DaytimePhone || null,
+    ec1Mobile: data.ec1Mobile || null,
+    ec1Relationship: data.ec1Relationship || null,
+    ec1CanCollect: data.ec1CanCollect ?? false,
+    ec2Name: data.ec2Name || null,
+    ec2DaytimePhone: data.ec2DaytimePhone || null,
+    ec2Mobile: data.ec2Mobile || null,
+    ec2Relationship: data.ec2Relationship || null,
+    ec2CanCollect: data.ec2CanCollect ?? false,
+    collectionPassword: data.collectionPassword || null,
+    fundingType: data.fundingType || null,
+    fundingCode: data.fundingCode || null,
+    fundingCodeDate: data.fundingCodeDate || null,
+    fundingNotes: data.fundingNotes || null,
+    fundingApplicantName: data.fundingApplicantName || null,
+    fundingApplicantDob: data.fundingApplicantDob || null,
+    fundingApplicantNi: data.fundingApplicantNi || null,
+    daysSessions: JSON.stringify(data.daysSessions),
+    childInterests: data.childInterests || null,
+    attendsOtherSetting: data.attendsOtherSetting ?? false,
+    attendsOtherSettingDetails: data.attendsOtherSettingDetails || null,
+    parentConcerns: data.parentConcerns ?? false,
+    parentConcernsDetails: data.parentConcernsDetails || null,
+    immunisationsUpToDate: data.immunisationsUpToDate ?? null,
+    immunisationsSignature: data.immunisationsSignature || null,
+    doctorName: data.doctorName || null,
+    doctorPracticeName: data.doctorPracticeName || null,
+    doctorPracticeAddress: data.doctorPracticeAddress || null,
+    doctorPhone: data.doctorPhone || null,
+    dentistName: data.dentistName || null,
+    dentistPhone: data.dentistPhone || null,
+    otherProfessionalsInvolved: data.otherProfessionalsInvolved ?? false,
+    otherProfessionalsDetails: data.otherProfessionalsDetails || null,
+    hasMedicalConditions: data.hasMedicalConditions ?? false,
+    medicalConditionsDetails: data.medicalConditionsDetails || null,
+    takesMedication: data.takesMedication ?? false,
+    medicationFormData: data.medicationFormData || null,
+    ethnicity: data.ethnicity || null,
+    religion: data.religion || null,
+    culturalCelebrations: data.culturalCelebrations || null,
+    languagesSpokenAtHome: data.languagesSpokenAtHome || null,
+    mainLanguage: data.mainLanguage || null,
+    hearAboutUs: data.hearAboutUs || null,
+    notes: data.notes || null,
+  }).where(eq(enrolments.id, id))
+  revalidatePath('/enrolments')
+  revalidatePath(`/enrolments/${id}/edit`)
+}
+
 export async function updateEnrolmentStartDate(id: string, startDate: string) {
   await db.update(enrolments).set({ startDate: startDate || null }).where(eq(enrolments.id, id))
   revalidatePath('/enrolments')
@@ -207,6 +288,28 @@ type AdminTrackingField = 'welcomePackGivenAt' | 'tshirtGivenAt' | 'settlingSess
 export async function updateEnrolmentAdminField(id: string, field: AdminTrackingField, value: string) {
   await db.update(enrolments).set({ [field]: value || null }).where(eq(enrolments.id, id))
   revalidatePath('/enrolments')
+}
+
+export async function emailEnrolmentInvoice(id: string): Promise<{ ok: boolean; error?: string }> {
+  const [e] = await db.select().from(enrolments).where(eq(enrolments.id, id))
+  if (!e) return { ok: false, error: 'Enrolment not found' }
+
+  const email = e.parent1Email || e.contactEmail
+  if (!email) return { ok: false, error: 'No parent email on file for this enrolment' }
+
+  const html = buildEnrolmentInvoiceEmail({
+    childName: `${e.childFirstName} ${e.childLastName}`,
+    intakeYear: e.intakeYear,
+    welcomeFeePaid: e.welcomeFeePaid,
+    depositPaid: e.depositPaid,
+  })
+
+  try {
+    await sendEmail(email, `Winton Pre-School — Enrolment Invoice for ${e.childFirstName} ${e.childLastName}`, html)
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Failed to send email' }
+  }
 }
 
 export async function confirmEnrolmentKeyworker(enrolmentId: string, staffId: string | null) {
@@ -273,6 +376,11 @@ export async function promoteEnrolmentToChild(
     consumableConsent: data.consumableConsent,
     needs1to1: data.needs1to1,
     depositPaid,
+    // Parent 1 becomes the profile's Parent / Billing Contact, not a
+    // duplicate entry in Emergency Contacts.
+    parentName: data.contactName || null,
+    parentEmail: data.contactEmail || null,
+    parentPhone: data.contactPhone || null,
   }).returning()
 
   if (data.sessions.length > 0) {
@@ -337,17 +445,6 @@ export async function promoteEnrolmentToChild(
         parentPrintName: med.parentPrintName || null,
       })
     }
-  }
-
-  if (data.contactName.trim()) {
-    await db.insert(emergencyContacts).values({
-      childId: child.id,
-      name: data.contactName,
-      relationship: data.contactRelationship || 'Parent/Carer',
-      phone: data.contactPhone,
-      email: data.contactEmail || null,
-      isAuthorisedCollector: true,
-    })
   }
 
   await db.update(enrolments).set({ promotedChildId: child.id }).where(eq(enrolments.id, enrolmentId))

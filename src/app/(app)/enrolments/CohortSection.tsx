@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { updateEnrolmentFee, updateEnrolmentAdminField, confirmEnrolmentKeyworker, updateEnrolmentStartDate, bulkPromoteEnrolments, removeEnrolment } from './actions'
+import { confirmEnrolmentKeyworker, bulkPromoteEnrolments } from './actions'
 import { bulkArchiveChildren } from '@/app/(app)/children/actions'
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const
@@ -191,6 +191,12 @@ function getDayHoursFromRecord(daysSessions: Record<string, string>): Record<str
   return h
 }
 
+const ACCENTS = [
+  { border: 'border-blue-400', badgeBg: 'bg-blue-100', badgeText: 'text-blue-700', dot: 'bg-blue-500' },
+  { border: 'border-purple-400', badgeBg: 'bg-purple-100', badgeText: 'text-purple-700', dot: 'bg-purple-500' },
+  { border: 'border-teal-400', badgeBg: 'bg-teal-100', badgeText: 'text-teal-700', dot: 'bg-teal-500' },
+]
+
 export default function CohortSection({
   intakeYear,
   returningChildren,
@@ -198,6 +204,7 @@ export default function CohortSection({
   leavingChildren,
   isAdmin,
   staffData,
+  accentIndex,
 }: {
   intakeYear: number
   returningChildren: ReturningChild[]
@@ -205,20 +212,23 @@ export default function CohortSection({
   leavingChildren: LeavingChild[] | null
   isAdmin: boolean
   staffData: StaffMember[]
+  accentIndex: number
 }) {
-  const [removing, setRemoving] = useState<string | null>(null)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const accent = ACCENTS[accentIndex % ACCENTS.length]
   const [confirmingKw, setConfirmingKw] = useState<string | null>(null)
   const [changingKw, setChangingKw] = useState<Set<string>>(new Set())
-  const [editingStartDate, setEditingStartDate] = useState<string | null>(null)
-  const [startDateDraft, setStartDateDraft] = useState('')
+  const [kwOpen, setKwOpen] = useState<Set<string>>(new Set())
   const [bulkPromoting, setBulkPromoting] = useState(false)
   const [bulkResult, setBulkResult] = useState<{ promoted: number; skipped: { name: string; reason: string }[] } | null>(null)
   const [archivingLeavers, setArchivingLeavers] = useState(false)
 
-  async function handleSaveStartDate(id: string) {
-    await updateEnrolmentStartDate(id, startDateDraft)
-    setEditingStartDate(null)
+  function toggleKwOpen(id: string) {
+    setKwOpen(prev => {
+      const s = new Set(prev)
+      if (s.has(id)) s.delete(id)
+      else s.add(id)
+      return s
+    })
   }
 
   async function handleBulkPromote() {
@@ -230,13 +240,6 @@ export default function CohortSection({
     const result = await bulkPromoteEnrolments(intakeYear)
     setBulkPromoting(false)
     setBulkResult(result)
-  }
-
-  async function handleRemove(id: string, name: string) {
-    if (!confirm(`Remove ${name} from the enrolments list?`)) return
-    setRemoving(id)
-    await removeEnrolment(id)
-    setRemoving(null)
   }
 
   async function handleArchiveLeavers() {
@@ -294,25 +297,35 @@ export default function CohortSection({
   const totalCount = enrichedReturning.length + enrichedNew.length
 
   return (
-    <div className="mb-10 print:mb-6 print:break-before-page first:print:break-before-avoid">
+    <div className={`mb-12 print:mb-6 print:break-before-page first:print:break-before-avoid pl-4 border-l-4 ${accent.border}`}>
       {/* Section header */}
-      <div className="print:hidden flex items-start justify-between mb-3 gap-3 flex-wrap">
-        <div>
-          <h2 className="text-lg font-bold text-gray-800">September {intakeYear} Enrolments</h2>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {totalCount} children · {enrichedReturning.length} returning · {enrichedNew.length} new
-          </p>
-        </div>
-        {isAdmin && enrichedNew.some(c => !c.promotedChildId) && (
+      <div className="print:hidden flex items-center gap-2 mb-1">
+        <span className={`w-2.5 h-2.5 rounded-full ${accent.dot} shrink-0`} />
+        <h2 className="text-lg font-bold text-gray-800">September {intakeYear} Enrolments</h2>
+        <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${accent.badgeBg} ${accent.badgeText}`}>
+          {accentIndex === 0 ? 'Nearest' : `+${accentIndex} year${accentIndex > 1 ? 's' : ''} out`}
+        </span>
+      </div>
+      <p className="print:hidden text-sm text-gray-500 mb-3">
+        {totalCount} children · {enrichedReturning.length} returning · {enrichedNew.length} new
+      </p>
+
+      {/* Promote-all banner — clear call to action, not buried in the header */}
+      {isAdmin && enrichedNew.some(c => !c.promotedChildId) && (
+        <div className="print:hidden mb-4 flex items-center justify-between gap-3 flex-wrap bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-green-800">Ready to move new starters into active profiles?</p>
+            <p className="text-xs text-green-700 mt-0.5">Creates a full child profile for every new starter below whose start date has arrived and who has a date of birth on file. Anyone not ready yet is skipped and listed.</p>
+          </div>
           <button
             onClick={handleBulkPromote}
             disabled={bulkPromoting}
-            className="px-4 py-2 bg-green-700 hover:bg-green-800 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+            className="px-4 py-2 bg-green-700 hover:bg-green-800 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 shrink-0"
           >
             {bulkPromoting ? 'Promoting…' : '✓ Promote all ready starters'}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Print header */}
       <div className="hidden print:flex justify-between items-baseline mb-3">
@@ -451,13 +464,41 @@ export default function CohortSection({
             )}
             {enrichedNew.map(child => {
               rowNum++
-              const isExpanded = expandedId === child.id
+              const hasDays = Object.keys(child.daysSessions).length > 0
+              const confirmedStaff = child.confirmedKeyworkerId
+                ? staffData.find(s => s.id === child.confirmedKeyworkerId)
+                : null
+              const isChanging = changingKw.has(child.id)
+              const isConfirming = confirmingKw === child.id
+              const isKwOpen = kwOpen.has(child.id)
+
+              async function handleConfirm(staffId: string) {
+                setConfirmingKw(child.id)
+                await confirmEnrolmentKeyworker(child.id, staffId)
+                setChangingKw(prev => { const s = new Set(prev); s.delete(child.id); return s })
+                setConfirmingKw(null)
+              }
+
+              async function handleClear() {
+                setConfirmingKw(child.id)
+                await confirmEnrolmentKeyworker(child.id, null)
+                setChangingKw(prev => { const s = new Set(prev); s.delete(child.id); return s })
+                setConfirmingKw(null)
+              }
+
+              const requiredAbbrs = Object.keys(child.daysSessions).map(d => DAY_ABBR[d]).filter(Boolean)
+              const ranked = staffData
+                .map(s => {
+                  const staffDays = s.workingDays.split(',').map(d => d.trim())
+                  const matchingDays = Object.keys(child.daysSessions).filter(d => staffDays.includes(DAY_ABBR[d]))
+                  return { ...s, matchCount: matchingDays.length, matchingDays }
+                })
+                .filter(s => s.matchCount > 0)
+                .sort((a, b) => b.matchCount - a.matchCount || a.keyChildrenCount - b.keyChildrenCount)
+
               return (
                 <React.Fragment key={child.id}>
-                  <tr
-                    className="border-b border-gray-100 even:bg-gray-50/40 cursor-pointer hover:bg-blue-50/40 transition-colors"
-                    onClick={() => setExpandedId(isExpanded ? null : child.id)}
-                  >
+                  <tr className="border-b border-gray-100 even:bg-gray-50/40">
                     <td className={`${td} text-center text-gray-400 font-medium`}>{rowNum}</td>
                     <td className={`${td} font-semibold text-gray-900`}>
                       <span>{child.firstName}</span>
@@ -488,331 +529,137 @@ export default function CohortSection({
                       {child.totalHours || <span className="text-gray-300">—</span>}
                     </td>
                   </tr>
-                  {isExpanded && (
-                    <tr className="bg-amber-50 border-b border-amber-100 print:hidden">
-                      <td colSpan={10} className="px-4 py-3 space-y-3">
-                        {/* Contact details */}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-8 gap-y-1.5 text-xs">
-                          <div>
-                            <span className="text-gray-500">Parent / carer: </span>
-                            <span className="text-gray-900 font-medium">{child.parentCarerName}</span>
-                          </div>
-                          {child.contactPhone && (
-                            <div>
-                              <span className="text-gray-500">Phone: </span>
-                              <span className="text-gray-900">{child.contactPhone}</span>
-                            </div>
-                          )}
-                          {child.contactEmail && (
-                            <div>
-                              <span className="text-gray-500">Email: </span>
-                              <span className="text-gray-900">{child.contactEmail}</span>
-                            </div>
-                          )}
-                          {child.notes && (
-                            <div className="col-span-2 sm:col-span-3">
-                              <span className="text-gray-500">Notes: </span>
-                              <span className="text-gray-900">{child.notes}</span>
-                            </div>
-                          )}
-                          <div onClick={e => e.stopPropagation()}>
-                            <span className="text-gray-500">Start date: </span>
-                            {editingStartDate === child.id ? (
-                              <span className="inline-flex items-center gap-1.5">
-                                <input
-                                  type="date"
-                                  value={startDateDraft}
-                                  onChange={e => setStartDateDraft(e.target.value)}
-                                  className="border border-gray-300 rounded px-1.5 py-0.5 text-xs text-gray-900 bg-white"
-                                />
-                                <button onClick={() => handleSaveStartDate(child.id)} className="text-blue-700 hover:underline">Save</button>
-                                <button onClick={() => setEditingStartDate(null)} className="text-gray-400 hover:text-gray-600">Cancel</button>
-                              </span>
-                            ) : (
-                              <span className="text-gray-900">
-                                {child.startDate ? fmtDob(child.startDate) : 'Standard September intake'}
-                                {isAdmin && (
-                                  <button
-                                    onClick={() => { setEditingStartDate(child.id); setStartDateDraft(child.startDate ?? '') }}
-                                    className="ml-1.5 text-blue-700 hover:underline"
-                                  >
-                                    Edit
-                                  </button>
-                                )}
-                              </span>
-                            )}
-                          </div>
-                        </div>
 
-                        {/* Fees */}
-                        <div className="flex items-start gap-3 flex-wrap">
-                          <span className="text-xs text-gray-500 font-medium mt-2">Fees:</span>
-                          <button
-                            type="button"
-                            onClick={e => { e.stopPropagation(); updateEnrolmentFee(child.id, 'welcomeFeePaid', !child.welcomeFeePaid) }}
-                            disabled={!isAdmin}
-                            className={`flex items-start gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors text-left ${
-                              child.welcomeFeePaid
-                                ? 'bg-green-50 border-green-300 text-green-700'
-                                : 'bg-white border-gray-300 text-gray-500'
-                            } ${isAdmin ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+                  {/* Slim action row — always visible, no click-to-expand */}
+                  <tr className="border-b border-gray-100 bg-gray-50/60 print:hidden">
+                    <td colSpan={10} className="px-4 py-2.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {child.promotedChildId ? (
+                          <a
+                            href={`/children/${child.promotedChildId}`}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-300 text-green-700 text-xs font-medium rounded-lg hover:bg-green-100 transition-colors"
                           >
-                            <span className="mt-0.5">{child.welcomeFeePaid ? '✓' : '○'}</span>
-                            <div>
-                              <div>Welcome fee £50</div>
-                              <div className="text-[10px] opacity-60 font-normal mt-0.5">3 settle-in sessions, home visit &amp; t-shirt · non-refundable</div>
-                            </div>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={e => { e.stopPropagation(); updateEnrolmentFee(child.id, 'depositPaid', !child.depositPaid) }}
-                            disabled={!isAdmin}
-                            className={`flex items-start gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors text-left ${
-                              child.depositPaid
-                                ? 'bg-green-50 border-green-300 text-green-700'
-                                : 'bg-white border-gray-300 text-gray-500'
-                            } ${isAdmin ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+                            ✓ View child profile →
+                          </a>
+                        ) : isAdmin ? (
+                          <a
+                            href={`/enrolments/${child.id}/promote`}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#020e2f] text-white text-xs font-medium rounded-lg hover:bg-[#010922] transition-colors"
                           >
-                            <span className="mt-0.5">{child.depositPaid ? '✓' : '○'}</span>
-                            <div>
-                              <div>Deposit £50 per term</div>
-                              <div className="text-[10px] opacity-60 font-normal mt-0.5">paid in advance · deducted from first invoice</div>
-                            </div>
-                          </button>
-                          <button
-                            onClick={e => {
-                              e.stopPropagation()
-                              const html = generateEnrolmentInvoiceHTML(child, intakeYear)
-                              const blob = new Blob([html], { type: 'text/html' })
-                              const url = URL.createObjectURL(blob)
-                              window.open(url, '_blank')
-                              setTimeout(() => URL.revokeObjectURL(url), 15000)
-                            }}
-                            className="text-xs text-blue-700 border border-blue-200 rounded-lg px-3 py-2 hover:bg-blue-50 transition-colors"
-                          >
-                            Generate invoice
-                          </button>
-                          {isAdmin && (
-                            <button
-                              onClick={e => { e.stopPropagation(); handleRemove(child.id, `${child.firstName} ${child.lastName}`) }}
-                              disabled={removing === child.id}
-                              className="ml-auto text-xs text-red-500 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-50 disabled:opacity-50"
-                            >
-                              {removing === child.id ? 'Removing...' : 'Remove'}
-                            </button>
-                          )}
-                        </div>
+                            + Start child profile
+                          </a>
+                        ) : null}
 
-                        {/* Welcome pack & settling in */}
+                        <button
+                          type="button"
+                          onClick={() => toggleKwOpen(child.id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                        >
+                          Keyworker: {confirmedStaff ? confirmedStaff.name : 'Not assigned'} {isKwOpen ? '▴' : '▾'}
+                        </button>
+
                         {isAdmin && (
-                          <div className="pt-2 border-t border-amber-200" onClick={e => e.stopPropagation()}>
-                            <p className="text-xs font-medium text-gray-600 mb-1.5">Welcome pack &amp; settling in</p>
-                            <div className="flex flex-wrap gap-3">
-                              <label className="flex items-center gap-1.5 text-xs text-gray-600">
-                                Pack given
-                                <input
-                                  type="date"
-                                  value={child.welcomePackGivenAt ?? ''}
-                                  onChange={e => updateEnrolmentAdminField(child.id, 'welcomePackGivenAt', e.target.value)}
-                                  className="border border-gray-300 rounded px-1.5 py-1 text-xs text-gray-900 bg-white"
-                                />
-                              </label>
-                              <label className="flex items-center gap-1.5 text-xs text-gray-600">
-                                Polo given
-                                <input
-                                  type="date"
-                                  value={child.tshirtGivenAt ?? ''}
-                                  onChange={e => updateEnrolmentAdminField(child.id, 'tshirtGivenAt', e.target.value)}
-                                  className="border border-gray-300 rounded px-1.5 py-1 text-xs text-gray-900 bg-white"
-                                />
-                              </label>
-                              <label className="flex items-center gap-1.5 text-xs text-gray-600">
-                                Session 1
-                                <input
-                                  type="date"
-                                  value={child.settlingSession1 ?? ''}
-                                  onChange={e => updateEnrolmentAdminField(child.id, 'settlingSession1', e.target.value)}
-                                  className="border border-gray-300 rounded px-1.5 py-1 text-xs text-gray-900 bg-white"
-                                />
-                              </label>
-                              <label className="flex items-center gap-1.5 text-xs text-gray-600">
-                                Session 2
-                                <input
-                                  type="date"
-                                  value={child.settlingSession2 ?? ''}
-                                  onChange={e => updateEnrolmentAdminField(child.id, 'settlingSession2', e.target.value)}
-                                  className="border border-gray-300 rounded px-1.5 py-1 text-xs text-gray-900 bg-white"
-                                />
-                              </label>
-                              <label className="flex items-center gap-1.5 text-xs text-gray-600">
-                                Session 3
-                                <input
-                                  type="date"
-                                  value={child.settlingSession3 ?? ''}
-                                  onChange={e => updateEnrolmentAdminField(child.id, 'settlingSession3', e.target.value)}
-                                  className="border border-gray-300 rounded px-1.5 py-1 text-xs text-gray-900 bg-white"
-                                />
-                              </label>
-                            </div>
-                          </div>
+                          <a
+                            href={`/enrolments/${child.id}/edit`}
+                            className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                          >
+                            Edit enrolment form
+                          </a>
                         )}
+                      </div>
 
-                        {/* Profile status */}
-                        <div className="flex items-center gap-3 pt-1 border-t border-amber-200">
-                          {child.promotedChildId ? (
-                            <a
-                              href={`/children/${child.promotedChildId}`}
-                              onClick={e => e.stopPropagation()}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-300 text-green-700 text-xs font-medium rounded-lg hover:bg-green-100 transition-colors"
-                            >
-                              ✓ Profile created — View child profile →
-                            </a>
-                          ) : isAdmin ? (
-                            <a
-                              href={`/enrolments/${child.id}/promote`}
-                              onClick={e => e.stopPropagation()}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#020e2f] text-white text-xs font-medium rounded-lg hover:bg-[#010922] transition-colors"
-                            >
-                              + Start child profile
-                            </a>
-                          ) : null}
-                        </div>
-
-                        {/* Keyworker confirmation */}
-                        {(() => {
-                          const hasDays = Object.keys(child.daysSessions).length > 0
-                          const confirmedStaff = child.confirmedKeyworkerId
-                            ? staffData.find(s => s.id === child.confirmedKeyworkerId)
-                            : null
-                          const isChanging = changingKw.has(child.id)
-                          const isConfirming = confirmingKw === child.id
-
-                          async function handleConfirm(e: React.MouseEvent, staffId: string) {
-                            e.stopPropagation()
-                            setConfirmingKw(child.id)
-                            await confirmEnrolmentKeyworker(child.id, staffId)
-                            setChangingKw(prev => { const s = new Set(prev); s.delete(child.id); return s })
-                            setConfirmingKw(null)
-                          }
-
-                          async function handleClear(e: React.MouseEvent) {
-                            e.stopPropagation()
-                            setConfirmingKw(child.id)
-                            await confirmEnrolmentKeyworker(child.id, null)
-                            setChangingKw(prev => { const s = new Set(prev); s.delete(child.id); return s })
-                            setConfirmingKw(null)
-                          }
-
-                          const requiredAbbrs = Object.keys(child.daysSessions).map(d => DAY_ABBR[d]).filter(Boolean)
-                          const ranked = staffData
-                            .map(s => {
-                              const staffDays = s.workingDays.split(',').map(d => d.trim())
-                              const matchingDays = Object.keys(child.daysSessions).filter(d => staffDays.includes(DAY_ABBR[d]))
-                              return { ...s, matchCount: matchingDays.length, matchingDays }
-                            })
-                            .filter(s => s.matchCount > 0)
-                            .sort((a, b) => b.matchCount - a.matchCount || a.keyChildrenCount - b.keyChildrenCount)
-
-                          return (
-                            <div className="pt-2 border-t border-amber-200">
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-semibold text-gray-600">Keyworker</span>
-                                {confirmedStaff && !isChanging && (
-                                  <button
-                                    onClick={e => { e.stopPropagation(); setChangingKw(prev => new Set([...prev, child.id])) }}
-                                    className="text-[10px] text-gray-400 hover:text-gray-600 underline"
-                                  >
-                                    Change
-                                  </button>
-                                )}
+                      {isKwOpen && (
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                          {confirmedStaff && !isChanging && (
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-300 rounded-lg text-xs text-green-800 w-fit">
+                                <span className="text-green-500">✓</span>
+                                <span className="font-semibold">{confirmedStaff.name}</span>
+                                <span className="text-green-600">
+                                  {ranked.find(r => r.id === confirmedStaff.id)?.matchingDays.map(d => DAY_LABEL[d]).join(', ')}
+                                </span>
                               </div>
+                              <button
+                                onClick={() => setChangingKw(prev => new Set([...prev, child.id]))}
+                                className="text-[10px] text-gray-400 hover:text-gray-600 underline"
+                              >
+                                Change
+                              </button>
+                            </div>
+                          )}
 
-                              {/* Confirmed state */}
-                              {confirmedStaff && !isChanging && (
-                                <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-300 rounded-lg text-xs text-green-800 w-fit">
-                                  <span className="text-green-500">✓</span>
-                                  <span className="font-semibold">{confirmedStaff.name}</span>
-                                  <span className="text-green-600">
-                                    {ranked.find(r => r.id === confirmedStaff.id)?.matchingDays.map(d => DAY_LABEL[d]).join(', ')}
-                                  </span>
+                          {(!confirmedStaff || isChanging) && (
+                            <>
+                              {!hasDays ? (
+                                <p className="text-xs text-gray-400">Add days on the enrolment form to see suggestions.</p>
+                              ) : ranked.length === 0 ? (
+                                <p className="text-xs text-gray-400">No staff available for the selected days.</p>
+                              ) : (
+                                <div className="flex flex-wrap gap-2">
+                                  {ranked.map((s, i) => (
+                                    <button
+                                      key={s.id}
+                                      type="button"
+                                      disabled={isConfirming}
+                                      onClick={() => handleConfirm(s.id)}
+                                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs transition-colors disabled:opacity-50 ${
+                                        i === 0
+                                          ? 'bg-green-50 border-green-300 text-green-800 hover:bg-green-100'
+                                          : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                                      }`}
+                                    >
+                                      <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${
+                                        i === 0 ? 'bg-green-200 text-green-800' : 'bg-gray-100 text-gray-500'
+                                      }`}>{i + 1}</span>
+                                      <span className="font-medium">{s.name}</span>
+                                      <span className={i === 0 ? 'text-green-600' : 'text-gray-400'}>
+                                        {s.matchingDays.map(d => DAY_LABEL[d]).join(', ')}
+                                      </span>
+                                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                        s.keyChildrenCount === 0
+                                          ? 'bg-blue-50 text-blue-600'
+                                          : s.keyChildrenCount <= 6
+                                          ? 'bg-green-100 text-green-700'
+                                          : s.keyChildrenCount <= 10
+                                          ? 'bg-amber-100 text-amber-700'
+                                          : 'bg-red-50 text-red-600'
+                                      }`}>
+                                        {s.keyChildrenCount} key {s.keyChildrenCount === 1 ? 'child' : 'children'}
+                                      </span>
+                                      {s.matchCount < requiredAbbrs.length && (
+                                        <span className="text-[10px] text-gray-400">({s.matchCount}/{requiredAbbrs.length} days)</span>
+                                      )}
+                                      {isConfirming && confirmingKw === child.id
+                                        ? <span className="text-[10px] text-gray-400">…</span>
+                                        : <span className={`text-[10px] font-semibold ${i === 0 ? 'text-green-700' : 'text-gray-400'}`}>Confirm →</span>
+                                      }
+                                    </button>
+                                  ))}
                                 </div>
                               )}
-
-                              {/* Pick / change list */}
-                              {(!confirmedStaff || isChanging) && (
-                                <>
-                                  {!hasDays ? (
-                                    <p className="text-xs text-gray-400">Add days above to see suggestions.</p>
-                                  ) : ranked.length === 0 ? (
-                                    <p className="text-xs text-gray-400">No staff available for the selected days.</p>
-                                  ) : (
-                                    <div className="flex flex-wrap gap-2">
-                                      {ranked.map((s, i) => (
-                                        <button
-                                          key={s.id}
-                                          type="button"
-                                          disabled={isConfirming}
-                                          onClick={e => handleConfirm(e, s.id)}
-                                          className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs transition-colors disabled:opacity-50 ${
-                                            i === 0
-                                              ? 'bg-green-50 border-green-300 text-green-800 hover:bg-green-100'
-                                              : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                                          }`}
-                                        >
-                                          <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${
-                                            i === 0 ? 'bg-green-200 text-green-800' : 'bg-gray-100 text-gray-500'
-                                          }`}>{i + 1}</span>
-                                          <span className="font-medium">{s.name}</span>
-                                          <span className={i === 0 ? 'text-green-600' : 'text-gray-400'}>
-                                            {s.matchingDays.map(d => DAY_LABEL[d]).join(', ')}
-                                          </span>
-                                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                                            s.keyChildrenCount === 0
-                                              ? 'bg-blue-50 text-blue-600'
-                                              : s.keyChildrenCount <= 6
-                                              ? 'bg-green-100 text-green-700'
-                                              : s.keyChildrenCount <= 10
-                                              ? 'bg-amber-100 text-amber-700'
-                                              : 'bg-red-50 text-red-600'
-                                          }`}>
-                                            {s.keyChildrenCount} key {s.keyChildrenCount === 1 ? 'child' : 'children'}
-                                          </span>
-                                          {s.matchCount < requiredAbbrs.length && (
-                                            <span className="text-[10px] text-gray-400">({s.matchCount}/{requiredAbbrs.length} days)</span>
-                                          )}
-                                          {isConfirming && confirmingKw === child.id
-                                            ? <span className="text-[10px] text-gray-400">…</span>
-                                            : <span className={`text-[10px] font-semibold ${i === 0 ? 'text-green-700' : 'text-gray-400'}`}>Confirm →</span>
-                                          }
-                                        </button>
-                                      ))}
-                                    </div>
-                                  )}
-                                  {isChanging && (
-                                    <div className="flex items-center gap-3 mt-2">
-                                      <button
-                                        onClick={e => { e.stopPropagation(); setChangingKw(prev => { const s = new Set(prev); s.delete(child.id); return s }) }}
-                                        className="text-[10px] text-gray-400 hover:text-gray-600"
-                                      >
-                                        Cancel
-                                      </button>
-                                      <button
-                                        onClick={handleClear}
-                                        disabled={isConfirming}
-                                        className="text-[10px] text-red-400 hover:text-red-600 disabled:opacity-50"
-                                      >
-                                        Remove assignment
-                                      </button>
-                                    </div>
-                                  )}
-                                </>
+                              {isChanging && (
+                                <div className="flex items-center gap-3 mt-2">
+                                  <button
+                                    onClick={() => setChangingKw(prev => { const s = new Set(prev); s.delete(child.id); return s })}
+                                    className="text-[10px] text-gray-400 hover:text-gray-600"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={handleClear}
+                                    disabled={isConfirming}
+                                    className="text-[10px] text-red-400 hover:text-red-600 disabled:opacity-50"
+                                  >
+                                    Remove assignment
+                                  </button>
+                                </div>
                               )}
-                            </div>
-                          )
-                        })()}
-                      </td>
-                    </tr>
-                  )}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
                 </React.Fragment>
               )
             })}

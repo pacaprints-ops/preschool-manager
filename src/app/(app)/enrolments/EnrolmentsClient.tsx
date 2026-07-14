@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect } from 'react'
-import { addEnrolment, updateEnrolmentFee, updateEnrolmentAdminField } from './actions'
+import { addEnrolment, updateEnrolmentFee, updateEnrolmentAdminField, emailEnrolmentInvoice } from './actions'
 import CohortSection, { type ReturningChild, type NewStarter, type LeavingChild, type StaffMember, generateEnrolmentInvoiceHTML } from './CohortSection'
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const
@@ -346,6 +346,8 @@ export default function EnrolmentsClient({
     welcomePackGivenAt: string; tshirtGivenAt: string
     settlingSession1: string; settlingSession2: string; settlingSession3: string
   } | null>(null)
+  const [emailingInvoice, setEmailingInvoice] = useState(false)
+  const [invoiceEmailResult, setInvoiceEmailResult] = useState<{ ok: boolean; error?: string } | null>(null)
 
   function set<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm(f => ({ ...f, [k]: v }))
@@ -488,6 +490,28 @@ export default function EnrolmentsClient({
     setStep('fees')
   }
 
+  async function handleEmailInvoice() {
+    if (!savedEnrolment) return
+    setEmailingInvoice(true)
+    setInvoiceEmailResult(null)
+    const result = await emailEnrolmentInvoice(savedEnrolment.id)
+    setEmailingInvoice(false)
+    setInvoiceEmailResult(result)
+  }
+
+  function handleOpenInvoice() {
+    if (!savedEnrolment || !pickedYear) return
+    const html = generateEnrolmentInvoiceHTML({
+      firstName: form.childFirstName, lastName: form.childLastName,
+      parentCarerName: form.parent1Name, contactEmail: form.parent1Email || null,
+      welcomeFeePaid: savedEnrolment.welcomeFeePaid, depositPaid: savedEnrolment.depositPaid,
+    }, pickedYear)
+    const blob = new Blob([html], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank')
+    setTimeout(() => URL.revokeObjectURL(url), 15000)
+  }
+
   function handlePrint() {
     const style = document.createElement('style')
     style.id = 'print-landscape'
@@ -514,7 +538,7 @@ export default function EnrolmentsClient({
       </div>
 
       {/* Cohort sections */}
-      {cohorts.map(cohort => (
+      {cohorts.map((cohort, i) => (
         <CohortSection
           key={cohort.intakeYear}
           intakeYear={cohort.intakeYear}
@@ -523,6 +547,7 @@ export default function EnrolmentsClient({
           leavingChildren={cohort.leavingChildren}
           isAdmin={isAdmin}
           staffData={staffData}
+          accentIndex={i}
         />
       ))}
 
@@ -923,55 +948,62 @@ export default function EnrolmentsClient({
               {step === 'fees' && savedEnrolment && (
                 <div className="space-y-3">
                   <p className="text-sm text-green-700 font-medium">✓ {form.childFirstName} {form.childLastName} saved to September {pickedYear} enrolments.</p>
-                  <div className="flex items-start gap-3 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const next = !savedEnrolment.welcomeFeePaid
-                        setSavedEnrolment(s => s ? { ...s, welcomeFeePaid: next } : s)
-                        updateEnrolmentFee(savedEnrolment.id, 'welcomeFeePaid', next)
-                      }}
-                      className={`flex items-start gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors text-left ${savedEnrolment.welcomeFeePaid ? 'bg-green-50 border-green-300 text-green-700' : 'bg-white border-gray-300 text-gray-500'}`}
-                    >
-                      <span className="mt-0.5">{savedEnrolment.welcomeFeePaid ? '✓' : '○'}</span>
-                      <div>
-                        <div>Welcome fee £50</div>
-                        <div className="text-[10px] opacity-60 font-normal mt-0.5">3 settle-in sessions, home visit &amp; t-shirt · non-refundable</div>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const next = !savedEnrolment.depositPaid
-                        setSavedEnrolment(s => s ? { ...s, depositPaid: next } : s)
-                        updateEnrolmentFee(savedEnrolment.id, 'depositPaid', next)
-                      }}
-                      className={`flex items-start gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors text-left ${savedEnrolment.depositPaid ? 'bg-green-50 border-green-300 text-green-700' : 'bg-white border-gray-300 text-gray-500'}`}
-                    >
-                      <span className="mt-0.5">{savedEnrolment.depositPaid ? '✓' : '○'}</span>
-                      <div>
-                        <div>Deposit £50 per term</div>
-                        <div className="text-[10px] opacity-60 font-normal mt-0.5">paid in advance · deducted from first invoice</div>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const html = generateEnrolmentInvoiceHTML({
-                          firstName: form.childFirstName, lastName: form.childLastName,
-                          parentCarerName: form.parent1Name, contactEmail: form.parent1Email || null,
-                          welcomeFeePaid: savedEnrolment.welcomeFeePaid, depositPaid: savedEnrolment.depositPaid,
-                        }, pickedYear!)
-                        const blob = new Blob([html], { type: 'text/html' })
-                        const url = URL.createObjectURL(blob)
-                        window.open(url, '_blank')
-                        setTimeout(() => URL.revokeObjectURL(url), 15000)
-                      }}
-                      className="text-xs text-blue-700 border border-blue-200 rounded-lg px-3 py-2 hover:bg-blue-50 transition-colors"
-                    >
-                      Generate invoice
-                    </button>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="text-sm font-semibold text-blue-900 mb-2">Welcome fee &amp; deposit invoice</p>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={handleEmailInvoice}
+                        disabled={emailingInvoice}
+                        className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
+                      >
+                        {emailingInvoice ? 'Sending…' : '✉ Email invoice to parent'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleOpenInvoice}
+                        className="text-sm text-blue-700 border border-blue-300 rounded-lg px-3 py-2 hover:bg-blue-100 transition-colors"
+                      >
+                        Open invoice
+                      </button>
+                    </div>
+                    {invoiceEmailResult && (
+                      invoiceEmailResult.ok
+                        ? <p className="text-xs text-green-700 mt-2">✓ Invoice emailed to the parent.</p>
+                        : <p className="text-xs text-red-600 mt-2">Couldn&apos;t send: {invoiceEmailResult.error}</p>
+                    )}
                   </div>
+
+                  <details className="text-xs text-gray-500">
+                    <summary className="cursor-pointer hover:text-gray-700">Already paid in person? Mark as received</summary>
+                    <div className="flex items-start gap-3 flex-wrap mt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = !savedEnrolment.welcomeFeePaid
+                          setSavedEnrolment(s => s ? { ...s, welcomeFeePaid: next } : s)
+                          updateEnrolmentFee(savedEnrolment.id, 'welcomeFeePaid', next)
+                        }}
+                        className={`flex items-start gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors text-left ${savedEnrolment.welcomeFeePaid ? 'bg-green-50 border-green-300 text-green-700' : 'bg-white border-gray-300 text-gray-500'}`}
+                      >
+                        <span className="mt-0.5">{savedEnrolment.welcomeFeePaid ? '✓' : '○'}</span>
+                        <div>Welcome fee £50 received</div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = !savedEnrolment.depositPaid
+                          setSavedEnrolment(s => s ? { ...s, depositPaid: next } : s)
+                          updateEnrolmentFee(savedEnrolment.id, 'depositPaid', next)
+                        }}
+                        className={`flex items-start gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors text-left ${savedEnrolment.depositPaid ? 'bg-green-50 border-green-300 text-green-700' : 'bg-white border-gray-300 text-gray-500'}`}
+                      >
+                        <span className="mt-0.5">{savedEnrolment.depositPaid ? '✓' : '○'}</span>
+                        <div>Deposit £50 received</div>
+                      </button>
+                    </div>
+                  </details>
 
                   <div className="border-t border-gray-100 pt-3 space-y-3">
                     <p className="text-xs font-semibold text-gray-600">Welcome pack &amp; settling in</p>
