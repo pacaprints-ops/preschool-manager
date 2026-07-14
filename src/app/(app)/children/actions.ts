@@ -109,6 +109,16 @@ export async function unarchiveChild(id: string) {
   revalidatePath(`/children/${id}`)
 }
 
+export async function bulkArchiveChildren(ids: string[]) {
+  if (ids.length === 0) return
+  await db.update(children).set({
+    archived: true,
+    archivedAt: new Date(),
+  }).where(inArray(children.id, ids))
+  revalidatePath('/children')
+  revalidatePath('/enrolments')
+}
+
 // ─── Sessions ─────────────────────────────────────────────────────────────────
 
 export async function updateChildSessions(childId: string, sessions: { day: string; sessionType: string; fundingType: string }[]) {

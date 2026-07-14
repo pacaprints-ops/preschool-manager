@@ -1,60 +1,97 @@
 import { db } from '@/lib/db'
-import { children, childSessions, enrolments, users } from '@/lib/db/schema'
-import { eq, and, isNotNull, sql } from 'drizzle-orm'
+import { children, childSessions, enrolments, users, policies } from '@/lib/db/schema'
+import { eq, and, isNotNull, inArray, sql } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import EnrolmentsClient from './EnrolmentsClient'
 
-const INTAKE_YEAR = 2027
-// Children born after this date will NOT be starting school in September 2027
-const SCHOOL_AGE_CUTOFF = '2023-08-31'
+// Reception intake cutoff: children born on/before 31 Aug in (intakeYear - 4) are
+// old enough to start school that September, so they're not part of the pre-school
+// roster for that intake year.
+function schoolCutoff(intakeYear: number): string {
+  return `${intakeYear - 4}-08-31`
+}
+
+// Always the next 3 Septembers from today. The window rolls itself forward —
+// once 1 September passes, that year drops off and a new one appears at the end.
+function nextThreeSeptembers(): number[] {
+  const now = new Date()
+  const nearest = now.getMonth() >= 8 ? now.getFullYear() + 1 : now.getFullYear() // Sept = month index 8
+  return [nearest, nearest + 1, nearest + 2]
+}
 
 export default async function EnrolmentsPage() {
-  const [session, allActive, allSessions, newStartersRaw, allStaff, keyChildrenCounts] = await Promise.all([
+  const years = nextThreeSeptembers()
+
+  const [session, allActive, allSessions, allEnrolments, allStaff, keyChildrenCounts, allPolicies] = await Promise.all([
     auth(),
     db.select().from(children).where(eq(children.archived, false)),
     db.select().from(childSessions),
-    db.select().from(enrolments).where(eq(enrolments.intakeYear, INTAKE_YEAR)).orderBy(enrolments.addedAt),
+    db.select().from(enrolments).where(inArray(enrolments.intakeYear, years)).orderBy(enrolments.addedAt),
     db.select({ id: users.id, name: users.name, workingDays: users.workingDays }).from(users).orderBy(users.name),
     db.select({ keyWorkerId: children.keyWorkerId, count: sql<number>`cast(count(*) as int)` })
       .from(children)
       .where(and(eq(children.archived, false), isNotNull(children.keyWorkerId)))
       .groupBy(children.keyWorkerId),
+    db.select({ id: policies.id, name: policies.name, content: policies.content })
+      .from(policies)
+      .where(eq(policies.active, true))
+      .orderBy(policies.sortOrder),
   ])
 
   const isAdmin = session?.user?.role === 'admin'
 
-  const returningChildren = allActive
-    .filter(c => c.dateOfBirth > SCHOOL_AGE_CUTOFF)
-    .map(c => ({
-      id: c.id,
-      firstName: c.firstName,
-      lastName: c.lastName,
-      dateOfBirth: c.dateOfBirth,
-      needs1to1: c.needs1to1 ?? false,
-      sessions: allSessions
-        .filter(s => s.childId === c.id)
-        .map(s => ({ day: s.day, sessionType: s.sessionType })),
-    }))
-    .sort((a, b) => a.dateOfBirth.localeCompare(b.dateOfBirth))
+  const cohorts = years.map((year, i) => {
+    const cutoff = schoolCutoff(year)
 
-  const newStarters = newStartersRaw.map(e => ({
-    id: e.id,
-    firstName: e.childFirstName,
-    lastName: e.childLastName,
-    dateOfBirth: e.dateOfBirth ?? null,
-    startDate: e.startDate ?? null,
-    parentCarerName: e.parentCarerName,
-    contactPhone: e.contactPhone ?? null,
-    contactEmail: e.contactEmail ?? null,
-    daysSessions: e.daysSessions
-      ? (JSON.parse(e.daysSessions) as Record<string, string>)
-      : {},
-    notes: e.notes ?? null,
-    welcomeFeePaid: e.welcomeFeePaid ?? false,
-    depositPaid: e.depositPaid ?? false,
-    confirmedKeyworkerId: e.confirmedKeyworkerId ?? null,
-    promotedChildId: e.promotedChildId ?? null,
-  }))
+    const returningChildren = allActive
+      .filter(c => c.dateOfBirth > cutoff)
+      .map(c => ({
+        id: c.id,
+        firstName: c.firstName,
+        lastName: c.lastName,
+        dateOfBirth: c.dateOfBirth,
+        needs1to1: c.needs1to1 ?? false,
+        sessions: allSessions
+          .filter(s => s.childId === c.id)
+          .map(s => ({ day: s.day, sessionType: s.sessionType })),
+      }))
+      .sort((a, b) => a.dateOfBirth.localeCompare(b.dateOfBirth))
+
+    const newStarters = allEnrolments
+      .filter(e => e.intakeYear === year)
+      .map(e => ({
+        id: e.id,
+        firstName: e.childFirstName,
+        lastName: e.childLastName,
+        dateOfBirth: e.dateOfBirth ?? null,
+        startDate: e.startDate ?? null,
+        parentCarerName: e.parentCarerName,
+        contactPhone: e.contactPhone ?? null,
+        contactEmail: e.contactEmail ?? null,
+        daysSessions: e.daysSessions ? (JSON.parse(e.daysSessions) as Record<string, string>) : {},
+        notes: e.notes ?? null,
+        welcomeFeePaid: e.welcomeFeePaid ?? false,
+        depositPaid: e.depositPaid ?? false,
+        welcomePackGivenAt: e.welcomePackGivenAt ?? null,
+        tshirtGivenAt: e.tshirtGivenAt ?? null,
+        settlingSession1: e.settlingSession1 ?? null,
+        settlingSession2: e.settlingSession2 ?? null,
+        settlingSession3: e.settlingSession3 ?? null,
+        confirmedKeyworkerId: e.confirmedKeyworkerId ?? null,
+        promotedChildId: e.promotedChildId ?? null,
+      }))
+
+    // Only the nearest (current) September surfaces a leavers list — the other
+    // two are too far out for "archive these now" to make sense.
+    const leavingChildren = i === 0
+      ? allActive
+          .filter(c => c.dateOfBirth <= cutoff)
+          .map(c => ({ id: c.id, firstName: c.firstName, lastName: c.lastName, dateOfBirth: c.dateOfBirth }))
+          .sort((a, b) => a.dateOfBirth.localeCompare(b.dateOfBirth))
+      : null
+
+    return { intakeYear: year, returningChildren, newStarters, leavingChildren }
+  })
 
   const seenNames = new Set<string>()
   const staffData = allStaff
@@ -70,11 +107,10 @@ export default async function EnrolmentsPage() {
 
   return (
     <EnrolmentsClient
-      returningChildren={returningChildren}
-      newStarters={newStarters}
-      intakeYear={INTAKE_YEAR}
+      cohorts={cohorts}
       isAdmin={isAdmin}
       staffData={staffData}
+      policies={allPolicies}
     />
   )
 }

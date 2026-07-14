@@ -1,230 +1,378 @@
 'use client'
 
-import React, { useState } from 'react'
-import { addEnrolment, removeEnrolment, updateEnrolmentFee, confirmEnrolmentKeyworker, updateEnrolmentStartDate, bulkPromoteEnrolments } from './actions'
-
-function generateEnrolmentInvoiceHTML(child: NewStarter, intakeYear: number): string {
-  const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
-  const welcomePaid = child.welcomeFeePaid
-  const depositPaid = child.depositPaid
-  const welcomeAmt = 50
-  const depositAmt = 50
-  const total = (!welcomePaid ? welcomeAmt : 0) + (!depositPaid ? depositAmt : 0)
-
-  const rows = [
-    !welcomePaid && `
-      <tr>
-        <td>
-          <strong>Welcome Fee</strong><br>
-          <span style="font-size:11px;color:#555;">Includes 3 settle-in sessions, home visit and t-shirt. Non-refundable.</span>
-        </td>
-        <td style="text-align:right;font-weight:600;white-space:nowrap;">£50.00</td>
-      </tr>`,
-    welcomePaid && `
-      <tr style="color:#888;">
-        <td><strong>Welcome Fee</strong> <span style="font-size:11px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:4px;font-weight:600;">PAID</span></td>
-        <td style="text-align:right;white-space:nowrap;text-decoration:line-through;">£50.00</td>
-      </tr>`,
-    !depositPaid && `
-      <tr>
-        <td>
-          <strong>Term Deposit</strong><br>
-          <span style="font-size:11px;color:#555;">Paid in advance. Deducted from your first term invoice.</span>
-        </td>
-        <td style="text-align:right;font-weight:600;white-space:nowrap;">£50.00</td>
-      </tr>`,
-    depositPaid && `
-      <tr style="color:#888;">
-        <td><strong>Term Deposit</strong> <span style="font-size:11px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:4px;font-weight:600;">PAID</span></td>
-        <td style="text-align:right;white-space:nowrap;text-decoration:line-through;">£50.00</td>
-      </tr>`,
-  ].filter(Boolean).join('')
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Enrolment Invoice — ${child.firstName} ${child.lastName}</title>
-  <style>
-    * { box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; font-size: 13px; margin: 40px auto; color: #000; max-width: 580px; }
-    h1 { font-size: 17px; text-align: center; margin: 0 0 2px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .subtitle { text-align: center; font-size: 12px; color: #555; margin-bottom: 24px; }
-    .meta { margin-bottom: 20px; font-size: 12px; }
-    .meta td { padding: 2px 6px; }
-    .meta .label { font-weight: 700; width: 140px; }
-    table.items { width: 100%; border-collapse: collapse; margin: 20px 0 8px; }
-    table.items th { border: 1px solid #bbb; padding: 8px 10px; background: #f0f0f0; font-size: 12px; text-align: left; }
-    table.items td { border: 1px solid #bbb; padding: 10px; vertical-align: top; }
-    .total-row td { border: 2px solid #333; padding: 10px; font-weight: 800; font-size: 15px; }
-    .notes { font-size: 11px; color: #555; margin-top: 24px; border-top: 1px solid #ddd; padding-top: 14px; line-height: 1.6; }
-    #print-btn { display: block; margin: 24px auto 0; padding: 9px 22px; background: #1e3a8a; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: Arial, sans-serif; }
-    @media print { #print-btn { display: none; } }
-  </style>
-</head>
-<body>
-  <h1>Winton Pre-School</h1>
-  <div class="subtitle">Enrolment Invoice · September ${intakeYear}</div>
-
-  <table class="meta">
-    <tr><td class="label">Child:</td><td>${child.firstName} ${child.lastName}</td></tr>
-    <tr><td class="label">Parent / Carer:</td><td>${child.parentCarerName}</td></tr>
-    ${child.contactEmail ? `<tr><td class="label">Email:</td><td>${child.contactEmail}</td></tr>` : ''}
-    <tr><td class="label">Date issued:</td><td>${today}</td></tr>
-  </table>
-
-  <table class="items">
-    <thead>
-      <tr>
-        <th>Description</th>
-        <th style="text-align:right;white-space:nowrap;">Amount</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rows}
-    </tbody>
-    <tfoot>
-      <tr class="total-row">
-        <td>Total ${total === 0 ? '(all paid)' : 'due'}</td>
-        <td style="text-align:right;white-space:nowrap;">£${total.toFixed(2)}</td>
-      </tr>
-    </tfoot>
-  </table>
-
-  <div class="notes">
-    <strong>Welcome fee</strong> — Non-refundable. Covers 3 settle-in sessions, a home visit and a pre-school t-shirt.<br>
-    <strong>Term deposit</strong> — Held in advance and deducted from your first term invoice once your child starts.
-    ${child.contactEmail ? `<br><br>Please make payment by bank transfer and quote your child's name as the reference.` : ''}
-  </div>
-
-  <button id="print-btn" onclick="window.print()">Print / Save as PDF</button>
-</body>
-</html>`
-}
+import { useRef, useState, useEffect } from 'react'
+import { addEnrolment, updateEnrolmentFee, updateEnrolmentAdminField } from './actions'
+import CohortSection, { type ReturningChild, type NewStarter, type LeavingChild, type StaffMember, generateEnrolmentInvoiceHTML } from './CohortSection'
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const
 const DAY_LABEL: Record<string, string> = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri' }
-const DAY_ABBR: Record<string, string> = { monday: 'mon', tuesday: 'tue', wednesday: 'wed', thursday: 'thu', friday: 'fri' }
-const SESSION_HOURS: Record<string, number> = { morning: 3, afternoon: 3, full_day: 6 }
 const SESSION_LABEL: Record<string, string> = { morning: 'AM', afternoon: 'PM', full_day: 'Full' }
 
-type ReturningChild = {
-  id: string
-  firstName: string
-  lastName: string
-  dateOfBirth: string
-  needs1to1: boolean
-  sessions: { day: string; sessionType: string }[]
+const FUNDING_OPTIONS = [
+  { value: '', label: 'No funding / not applicable' },
+  { value: 'universal15', label: 'Universal 15 hours' },
+  { value: 'extended30', label: 'Extended 30 hours' },
+  { value: 'two_year', label: '2-Year Funding' },
+  { value: 'senif', label: 'SENIF' },
+]
+
+type Cohort = {
+  intakeYear: number
+  returningChildren: ReturningChild[]
+  newStarters: NewStarter[]
+  leavingChildren: LeavingChild[] | null
 }
 
-type NewStarter = {
-  id: string
-  firstName: string
-  lastName: string
-  dateOfBirth: string | null
-  startDate: string | null
-  parentCarerName: string
-  contactPhone: string | null
-  contactEmail: string | null
-  daysSessions: Record<string, string>
-  notes: string | null
-  welcomeFeePaid: boolean
-  depositPaid: boolean
-  confirmedKeyworkerId: string | null
-  promotedChildId: string | null
+export type Policy = { id: string; name: string; content: string }
+
+const STEPS = ['year', 'child', 'family', 'emergency', 'funding', 'about', 'health', 'culture', 'policies', 'fees'] as const
+type Step = typeof STEPS[number]
+
+const STEP_TITLE: Record<Step, string> = {
+  year: 'Which September?',
+  child: "Child's Details",
+  family: 'Family Details',
+  emergency: 'Emergency Contacts',
+  funding: 'Funding & Sessions',
+  about: 'About Your Child',
+  health: 'Health Questions',
+  culture: 'Ethnicity, Culture & Language',
+  policies: 'Policies',
+  fees: 'Welcome Fee & Deposit',
 }
 
-type StaffMember = {
-  id: string
+type MedForm = {
+  formDate: string
   name: string
-  workingDays: string // comma-separated abbreviations: "mon,tue,wed,thu,fri"
-  keyChildrenCount: number
+  dosage: string
+  frequency: string
+  conditionDiagnosis: string
+  conditionSymptoms: string
+  hospitalContactName: string
+  hospitalContactPhone: string
+  doctorContactName: string
+  doctorContactPhone: string
+  administeredAtHome: string
+  durationOfTreatment: string
+  dateDispensed: string
+  storage: string
+  expiryDate: string
+  specialPrecautions: string
+  possibleSideEffects: string
+  emergencyProcedures: string
+  parentSignature: string
+  parentPrintName: string
+}
+
+const EMPTY_MED: MedForm = {
+  formDate: new Date().toISOString().slice(0, 10), name: '', dosage: '', frequency: '',
+  conditionDiagnosis: '', conditionSymptoms: '', hospitalContactName: '', hospitalContactPhone: '',
+  doctorContactName: '', doctorContactPhone: '', administeredAtHome: '', durationOfTreatment: '',
+  dateDispensed: '', storage: '', expiryDate: '', specialPrecautions: '', possibleSideEffects: '',
+  emergencyProcedures: '', parentSignature: '', parentPrintName: '',
 }
 
 type FormState = {
   childFirstName: string
   childLastName: string
+  childGender: string
   dateOfBirth: string
+  childAddress: string
+  childPostcode: string
+  birthCertificateSeen: boolean
   startDate: string
-  parentCarerName: string
-  contactPhone: string
-  contactEmail: string
+
+  parent1Name: string
+  parent1DaytimePhone: string
+  parent1Mobile: string
+  parent1Email: string
+  parent1Relationship: string
+  parent1ParentalResponsibility: boolean
+  parent2Name: string
+  parent2DaytimePhone: string
+  parent2Mobile: string
+  parent2Email: string
+  parent2Relationship: string
+  parent2ParentalResponsibility: boolean
+
+  ec1Name: string
+  ec1DaytimePhone: string
+  ec1Mobile: string
+  ec1Relationship: string
+  ec1CanCollect: boolean
+  ec2Name: string
+  ec2DaytimePhone: string
+  ec2Mobile: string
+  ec2Relationship: string
+  ec2CanCollect: boolean
+  collectionPassword: string
+
+  fundingType: string
+  fundingCode: string
+  fundingCodeDate: string
+  fundingNotes: string
+  fundingApplicantName: string
+  fundingApplicantDob: string
+  fundingApplicantNi: string
   daysSessions: Record<string, string>
+
+  childInterests: string
+  attendsOtherSetting: boolean
+  attendsOtherSettingDetails: string
+  parentConcerns: boolean
+  parentConcernsDetails: string
+
+  immunisationsUpToDate: boolean | null
+  immunisationsSignature: string
+  doctorName: string
+  doctorPracticeName: string
+  doctorPracticeAddress: string
+  doctorPhone: string
+  dentistName: string
+  dentistPhone: string
+  otherProfessionalsInvolved: boolean
+  otherProfessionalsDetails: string
+  hasMedicalConditions: boolean
+  medicalConditionsDetails: string
+  takesMedication: boolean
+  medicationForm: MedForm
+
+  ethnicity: string
+  religion: string
+  culturalCelebrations: string
+  languagesSpokenAtHome: string
+  mainLanguage: string
+  hearAboutUs: string
   notes: string
 }
 
 const EMPTY_FORM: FormState = {
-  childFirstName: '', childLastName: '', dateOfBirth: '', startDate: '',
-  parentCarerName: '', contactPhone: '', contactEmail: '',
-  daysSessions: {}, notes: '',
-}
-
-// Reference date for age calculations: 1 September of the intake year
-function ageAtSeptember(dob: string | null, year: number): number | null {
-  if (!dob) return null
-  const ref = new Date(`${year}-09-01T12:00:00`)
-  const d = new Date(dob + 'T12:00:00')
-  let age = ref.getFullYear() - d.getFullYear()
-  if (ref.getMonth() < d.getMonth() || (ref.getMonth() === d.getMonth() && ref.getDate() < d.getDate())) age--
-  return age
-}
-
-function fmtDob(dob: string | null): string {
-  if (!dob) return '—'
-  return new Date(dob + 'T12:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
-}
-
-function getDayHoursFromSessions(sessions: { day: string; sessionType: string }[]): Record<string, number> {
-  const h: Record<string, number> = {}
-  for (const s of sessions) {
-    h[s.day] = (h[s.day] || 0) + (SESSION_HOURS[s.sessionType] ?? 0)
-  }
-  return h
-}
-
-function getDayHoursFromRecord(daysSessions: Record<string, string>): Record<string, number> {
-  const h: Record<string, number> = {}
-  for (const [day, sessionType] of Object.entries(daysSessions)) {
-    h[day] = SESSION_HOURS[sessionType] ?? 0
-  }
-  return h
+  childFirstName: '', childLastName: '', childGender: '', dateOfBirth: '', childAddress: '', childPostcode: '',
+  birthCertificateSeen: false, startDate: '',
+  parent1Name: '', parent1DaytimePhone: '', parent1Mobile: '', parent1Email: '', parent1Relationship: '', parent1ParentalResponsibility: false,
+  parent2Name: '', parent2DaytimePhone: '', parent2Mobile: '', parent2Email: '', parent2Relationship: '', parent2ParentalResponsibility: false,
+  ec1Name: '', ec1DaytimePhone: '', ec1Mobile: '', ec1Relationship: '', ec1CanCollect: false,
+  ec2Name: '', ec2DaytimePhone: '', ec2Mobile: '', ec2Relationship: '', ec2CanCollect: false,
+  collectionPassword: '',
+  fundingType: '', fundingCode: '', fundingCodeDate: '', fundingNotes: '', fundingApplicantName: '', fundingApplicantDob: '', fundingApplicantNi: '',
+  daysSessions: {},
+  childInterests: '', attendsOtherSetting: false, attendsOtherSettingDetails: '', parentConcerns: false, parentConcernsDetails: '',
+  immunisationsUpToDate: null, immunisationsSignature: '',
+  doctorName: '', doctorPracticeName: '', doctorPracticeAddress: '', doctorPhone: '', dentistName: '', dentistPhone: '',
+  otherProfessionalsInvolved: false, otherProfessionalsDetails: '',
+  hasMedicalConditions: false, medicalConditionsDetails: '',
+  takesMedication: false, medicationForm: EMPTY_MED,
+  ethnicity: '', religion: '', culturalCelebrations: '', languagesSpokenAtHome: '', mainLanguage: '', hearAboutUs: '', notes: '',
 }
 
 const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700'
+const labelCls = 'block text-xs text-gray-600 mb-1'
+
+// ─── Small reusable field helpers ──────────────────────────────────────────────
+
+function Field({ label, value, onChange, type = 'text', placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string
+}) {
+  return (
+    <div>
+      <label className={labelCls}>{label}</label>
+      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className={inputCls} />
+    </div>
+  )
+}
+
+function TextArea({ label, value, onChange, rows = 2 }: { label: string; value: string; onChange: (v: string) => void; rows?: number }) {
+  return (
+    <div>
+      <label className={labelCls}>{label}</label>
+      <textarea value={value} onChange={e => onChange(e.target.value)} rows={rows} className={inputCls} />
+    </div>
+  )
+}
+
+function YesNo({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div>
+      <label className={labelCls}>{label}</label>
+      <div className="flex gap-2">
+        {[{ v: true, l: 'Yes' }, { v: false, l: 'No' }].map(opt => (
+          <button
+            key={String(opt.v)}
+            type="button"
+            onClick={() => onChange(opt.v)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+              value === opt.v ? 'bg-[#020e2f] text-white border-[#020e2f]' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            {opt.l}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function YesNoNote({ label, value, onChange, note, onNoteChange, notePlaceholder }: {
+  label: string; value: boolean; onChange: (v: boolean) => void
+  note: string; onNoteChange: (v: string) => void; notePlaceholder?: string
+}) {
+  return (
+    <div>
+      <YesNo label={label} value={value} onChange={onChange} />
+      {value && (
+        <textarea
+          value={note}
+          onChange={e => onNoteChange(e.target.value)}
+          rows={2}
+          placeholder={notePlaceholder}
+          className={`${inputCls} mt-2`}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Signature pad ────────────────────────────────────────────────────────────
+
+function SignaturePad({ label, onChange }: { label: string; onChange: (data: string) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const drawing = useRef(false)
+  const lastPos = useRef<{ x: number; y: number } | null>(null)
+  const onChangeRef = useRef(onChange)
+  const [hasDrawn, setHasDrawn] = useState(false)
+  onChangeRef.current = onChange
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const el = canvas
+    const ctx = el.getContext('2d')!
+    ctx.strokeStyle = '#1e293b'
+    ctx.lineWidth = 2
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+
+    function getPos(e: MouseEvent | Touch) {
+      const rect = el.getBoundingClientRect()
+      return { x: (e.clientX - rect.left) * (el.width / rect.width), y: (e.clientY - rect.top) * (el.height / rect.height) }
+    }
+    function onDown(e: MouseEvent | TouchEvent) {
+      e.preventDefault()
+      drawing.current = true
+      lastPos.current = getPos('touches' in e ? e.touches[0] : e)
+    }
+    function onMove(e: MouseEvent | TouchEvent) {
+      e.preventDefault()
+      if (!drawing.current || !lastPos.current) return
+      const pos = getPos('touches' in e ? e.touches[0] : e)
+      ctx.beginPath()
+      ctx.moveTo(lastPos.current.x, lastPos.current.y)
+      ctx.lineTo(pos.x, pos.y)
+      ctx.stroke()
+      lastPos.current = pos
+    }
+    function onUp(e: MouseEvent | TouchEvent) {
+      e.preventDefault()
+      if (!drawing.current) return
+      drawing.current = false
+      lastPos.current = null
+      setHasDrawn(true)
+      onChangeRef.current(el.toDataURL())
+    }
+    el.addEventListener('mousedown', onDown)
+    el.addEventListener('mousemove', onMove)
+    el.addEventListener('mouseup', onUp)
+    el.addEventListener('mouseleave', onUp)
+    el.addEventListener('touchstart', onDown, { passive: false })
+    el.addEventListener('touchmove', onMove, { passive: false })
+    el.addEventListener('touchend', onUp, { passive: false })
+    return () => {
+      el.removeEventListener('mousedown', onDown)
+      el.removeEventListener('mousemove', onMove)
+      el.removeEventListener('mouseup', onUp)
+      el.removeEventListener('mouseleave', onUp)
+      el.removeEventListener('touchstart', onDown)
+      el.removeEventListener('touchmove', onMove)
+      el.removeEventListener('touchend', onUp)
+    }
+  }, [])
+
+  function clear() {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    canvas.getContext('2d')!.clearRect(0, 0, canvas.width, canvas.height)
+    setHasDrawn(false)
+    onChangeRef.current('')
+  }
+
+  return (
+    <div>
+      <label className={labelCls}>{label}</label>
+      <div className="relative border border-gray-300 rounded-lg overflow-hidden bg-white">
+        <canvas ref={canvasRef} width={400} height={100} className="w-full touch-none block" />
+        {!hasDrawn && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><span className="text-gray-300 text-sm select-none">Sign here</span></div>}
+      </div>
+      {hasDrawn && <button type="button" onClick={clear} className="mt-1 text-xs text-gray-400 hover:text-red-500">Clear signature</button>}
+    </div>
+  )
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function EnrolmentsClient({
-  returningChildren,
-  newStarters,
-  intakeYear,
+  cohorts,
   isAdmin,
   staffData,
+  policies,
 }: {
-  returningChildren: ReturningChild[]
-  newStarters: NewStarter[]
-  intakeYear: number
+  cohorts: Cohort[]
   isAdmin: boolean
   staffData: StaffMember[]
+  policies: Policy[]
 }) {
-  const [adding, setAdding] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [step, setStep] = useState<Step>('year')
+  const [pickedYear, setPickedYear] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
-  const [removing, setRemoving] = useState<string | null>(null)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
-  const [confirmingKw, setConfirmingKw] = useState<string | null>(null) // enrolmentId currently being saved
-  const [changingKw, setChangingKw] = useState<Set<string>>(new Set()) // enrolmentIds in "change" mode
-  const [editingStartDate, setEditingStartDate] = useState<string | null>(null) // enrolmentId
-  const [startDateDraft, setStartDateDraft] = useState('')
-  const [bulkPromoting, setBulkPromoting] = useState(false)
-  const [bulkResult, setBulkResult] = useState<{ promoted: number; skipped: { name: string; reason: string }[] } | null>(null)
+  const [medFormOpen, setMedFormOpen] = useState(false)
+  const [signatures, setSignatures] = useState<Record<string, { parentPrintName: string; parentSignature: string; notes: string }>>({})
+  const [activePolicyId, setActivePolicyId] = useState<string | null>(null)
+  const [signingManager, setSigningManager] = useState(false)
+  const [managerName, setManagerName] = useState('')
+  const [managerSignature, setManagerSignature] = useState('')
+  const [savedEnrolment, setSavedEnrolment] = useState<{
+    id: string; welcomeFeePaid: boolean; depositPaid: boolean
+    welcomePackGivenAt: string; tshirtGivenAt: string
+    settlingSession1: string; settlingSession2: string; settlingSession3: string
+  } | null>(null)
+
+  function set<K extends keyof FormState>(k: K, v: FormState[K]) {
+    setForm(f => ({ ...f, [k]: v }))
+  }
+
+  function openModal() {
+    setPickedYear(null)
+    setForm(EMPTY_FORM)
+    setSignatures({})
+    setActivePolicyId(null)
+    setSigningManager(false)
+    setManagerName('')
+    setManagerSignature('')
+    setSavedEnrolment(null)
+    setStep('year')
+    setModalOpen(true)
+  }
+
+  function closeModal() {
+    setModalOpen(false)
+  }
 
   function toggleFormDay(day: string) {
     setForm(f => {
       const next = { ...f.daysSessions }
-      if (day in next) {
-        delete next[day]
-      } else {
-        next[day] = 'morning'
-      }
+      if (day in next) delete next[day]
+      else next[day] = 'morning'
       return { ...f, daysSessions: next }
     })
   }
@@ -233,90 +381,112 @@ export default function EnrolmentsClient({
     setForm(f => ({ ...f, daysSessions: { ...f.daysSessions, [day]: sessionType } }))
   }
 
-  async function handleAdd() {
-    if (!form.childFirstName || !form.childLastName || !form.parentCarerName) return
+  const stepIndex = STEPS.indexOf(step)
+
+  function goNext() {
+    const i = STEPS.indexOf(step)
+    if (i < STEPS.length - 1) setStep(STEPS[i + 1])
+  }
+  function goBack() {
+    const i = STEPS.indexOf(step)
+    if (i > 0) setStep(STEPS[i - 1])
+  }
+
+  function isPolicySigned(policyId: string) {
+    const s = signatures[policyId]
+    return !!s?.parentPrintName.trim() && !!s?.parentSignature
+  }
+
+  const canProceed =
+    step === 'year' ? pickedYear !== null :
+    step === 'child' ? form.childFirstName.trim() !== '' && form.childLastName.trim() !== '' :
+    step === 'family' ? form.parent1Name.trim() !== '' :
+    step === 'policies' ? (
+      policies.length === 0 ||
+      (policies.every(p => isPolicySigned(p.id)) && managerName.trim() !== '' && managerSignature !== '')
+    ) :
+    true
+
+  async function handleSaveAndContinueToFees() {
+    if (!pickedYear) return
     setSaving(true)
-    await addEnrolment({
-      intakeYear,
+    const id = await addEnrolment({
+      intakeYear: pickedYear,
       childFirstName: form.childFirstName,
       childLastName: form.childLastName,
+      childGender: form.childGender || undefined,
       dateOfBirth: form.dateOfBirth || undefined,
+      childAddress: form.childAddress || undefined,
+      childPostcode: form.childPostcode || undefined,
+      birthCertificateSeen: form.birthCertificateSeen,
       startDate: form.startDate || undefined,
-      parentCarerName: form.parentCarerName,
-      contactPhone: form.contactPhone || undefined,
-      contactEmail: form.contactEmail || undefined,
+      parent1Name: form.parent1Name,
+      parent1DaytimePhone: form.parent1DaytimePhone || undefined,
+      parent1Mobile: form.parent1Mobile || undefined,
+      parent1Email: form.parent1Email || undefined,
+      parent1Relationship: form.parent1Relationship || undefined,
+      parent1ParentalResponsibility: form.parent1ParentalResponsibility,
+      parent2Name: form.parent2Name || undefined,
+      parent2DaytimePhone: form.parent2DaytimePhone || undefined,
+      parent2Mobile: form.parent2Mobile || undefined,
+      parent2Email: form.parent2Email || undefined,
+      parent2Relationship: form.parent2Relationship || undefined,
+      parent2ParentalResponsibility: form.parent2ParentalResponsibility,
+      ec1Name: form.ec1Name || undefined,
+      ec1DaytimePhone: form.ec1DaytimePhone || undefined,
+      ec1Mobile: form.ec1Mobile || undefined,
+      ec1Relationship: form.ec1Relationship || undefined,
+      ec1CanCollect: form.ec1CanCollect,
+      ec2Name: form.ec2Name || undefined,
+      ec2DaytimePhone: form.ec2DaytimePhone || undefined,
+      ec2Mobile: form.ec2Mobile || undefined,
+      ec2Relationship: form.ec2Relationship || undefined,
+      ec2CanCollect: form.ec2CanCollect,
+      collectionPassword: form.collectionPassword || undefined,
+      fundingType: form.fundingType || undefined,
+      fundingCode: form.fundingCode || undefined,
+      fundingCodeDate: form.fundingCodeDate || undefined,
+      fundingNotes: form.fundingNotes || undefined,
+      fundingApplicantName: form.fundingApplicantName || undefined,
+      fundingApplicantDob: form.fundingApplicantDob || undefined,
+      fundingApplicantNi: form.fundingApplicantNi || undefined,
       daysSessions: form.daysSessions,
+      childInterests: form.childInterests || undefined,
+      attendsOtherSetting: form.attendsOtherSetting,
+      attendsOtherSettingDetails: form.attendsOtherSettingDetails || undefined,
+      parentConcerns: form.parentConcerns,
+      parentConcernsDetails: form.parentConcernsDetails || undefined,
+      immunisationsUpToDate: form.immunisationsUpToDate ?? undefined,
+      immunisationsSignature: form.immunisationsSignature || undefined,
+      doctorName: form.doctorName || undefined,
+      doctorPracticeName: form.doctorPracticeName || undefined,
+      doctorPracticeAddress: form.doctorPracticeAddress || undefined,
+      doctorPhone: form.doctorPhone || undefined,
+      dentistName: form.dentistName || undefined,
+      dentistPhone: form.dentistPhone || undefined,
+      otherProfessionalsInvolved: form.otherProfessionalsInvolved,
+      otherProfessionalsDetails: form.otherProfessionalsDetails || undefined,
+      hasMedicalConditions: form.hasMedicalConditions,
+      medicalConditionsDetails: form.medicalConditionsDetails || undefined,
+      takesMedication: form.takesMedication,
+      medicationFormData: form.takesMedication ? JSON.stringify(form.medicationForm) : undefined,
+      ethnicity: form.ethnicity || undefined,
+      religion: form.religion || undefined,
+      culturalCelebrations: form.culturalCelebrations || undefined,
+      languagesSpokenAtHome: form.languagesSpokenAtHome || undefined,
+      mainLanguage: form.mainLanguage || undefined,
+      hearAboutUs: form.hearAboutUs || undefined,
       notes: form.notes || undefined,
+      policySignatures: Object.entries(signatures).map(([policyId, s]) => ({ policyId, ...s })),
+      policiesManagerName: managerName || undefined,
     })
-    setForm(EMPTY_FORM)
     setSaving(false)
-    setAdding(false)
+    setSavedEnrolment({
+      id, welcomeFeePaid: false, depositPaid: false,
+      welcomePackGivenAt: '', tshirtGivenAt: '', settlingSession1: '', settlingSession2: '', settlingSession3: '',
+    })
+    setStep('fees')
   }
-
-  async function handleSaveStartDate(id: string) {
-    await updateEnrolmentStartDate(id, startDateDraft)
-    setEditingStartDate(null)
-  }
-
-  async function handleBulkPromote() {
-    const notYetPromoted = enrichedNew.filter(c => !c.promotedChildId)
-    if (notYetPromoted.length === 0) return
-    if (!confirm(`Promote all ${notYetPromoted.length} not-yet-started new starters to active child profiles now? Anyone with a future start date or missing date of birth will be skipped and can be promoted individually.`)) return
-    setBulkPromoting(true)
-    setBulkResult(null)
-    const result = await bulkPromoteEnrolments(intakeYear)
-    setBulkPromoting(false)
-    setBulkResult(result)
-  }
-
-  async function handleRemove(id: string, name: string) {
-    if (!confirm(`Remove ${name} from the enrolments list?`)) return
-    setRemoving(id)
-    await removeEnrolment(id)
-    setRemoving(null)
-  }
-
-  // Enrich returning children with hours and age
-  const enrichedReturning = returningChildren.map(c => {
-    const dayHours = getDayHoursFromSessions(c.sessions)
-    return {
-      ...c,
-      dayHours,
-      totalHours: Object.values(dayHours).reduce((a, b) => a + b, 0),
-      age: ageAtSeptember(c.dateOfBirth, intakeYear),
-    }
-  })
-
-  // Enrich new starters with hours and age — welcomeFeePaid/depositPaid are kept via spread
-  const enrichedNew = newStarters.map(c => {
-    const dayHours = getDayHoursFromRecord(c.daysSessions)
-    return {
-      ...c,
-      dayHours,
-      totalHours: Object.values(dayHours).reduce((a, b) => a + b, 0),
-      age: ageAtSeptember(c.dateOfBirth, intakeYear),
-    }
-  })
-
-  // Footer stats across all children
-  const allEnriched = [...enrichedReturning, ...enrichedNew]
-  const dayStats = DAYS.map(day => {
-    const attending = allEnriched.filter(c => (c.dayHours[day] ?? 0) > 0)
-    const gen = attending.filter(c => !('needs1to1' in c && c.needs1to1))
-    const age2 = attending.filter(c => c.age === 2)
-    const gen2 = gen.filter(c => c.age === 2).length
-    const gen34 = gen.filter(c => c.age !== null && c.age >= 3).length
-    const count1to1 = attending.filter(c => 'needs1to1' in c && c.needs1to1).length
-    const staffInRatio = Math.ceil(gen2 / 4) + Math.ceil(gen34 / 8)
-    return { total: attending.length, count2yr: age2.length, staffInRatio, count1to1, totalStaff: staffInRatio + count1to1 }
-  })
-
-  let rowNum = 0
-
-  const thBase = 'px-2 py-2 text-center text-xs font-bold border-r border-white/20 last:border-r-0'
-  const thLeft = 'px-2 py-2 text-left text-xs font-bold border-r border-white/20'
-  const td = 'px-2 py-1.5 text-xs border-r border-gray-100 last:border-r-0'
-  const tdCenter = 'px-1 py-1.5 text-xs text-center border-r border-gray-100 last:border-r-0'
 
   function handlePrint() {
     const style = document.createElement('style')
@@ -327,571 +497,546 @@ export default function EnrolmentsClient({
     setTimeout(() => document.getElementById('print-landscape')?.remove(), 1000)
   }
 
-  const totalCount = enrichedReturning.length + enrichedNew.length
-
   return (
     <div>
-      {/* Header */}
-      <div className="print:hidden flex items-start justify-between mb-4 gap-3 flex-wrap">
+      {/* Page header */}
+      <div className="print:hidden flex items-start justify-between mb-6 gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold text-gray-800">September {intakeYear} Enrolments</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {totalCount} children · {enrichedReturning.length} returning · {enrichedNew.length} new
-          </p>
+          <h1 className="text-xl font-bold text-gray-800">Enrolments</h1>
+          <p className="text-sm text-gray-500 mt-0.5">The next three September intakes, always up to date.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={handlePrint}
-            className="px-4 py-2 bg-[#020e2f] text-white text-sm font-medium rounded-lg hover:bg-[#010922]"
-          >
-            🖨 Print
-          </button>
-          {isAdmin && enrichedNew.some(c => !c.promotedChildId) && (
-            <button
-              onClick={handleBulkPromote}
-              disabled={bulkPromoting}
-              className="px-4 py-2 bg-green-700 hover:bg-green-800 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-            >
-              {bulkPromoting ? 'Promoting…' : '✓ Promote all ready starters'}
-            </button>
-          )}
+          <button onClick={handlePrint} className="px-4 py-2 bg-[#020e2f] text-white text-sm font-medium rounded-lg hover:bg-[#010922]">🖨 Print</button>
           {isAdmin && (
-            <button
-              onClick={() => setAdding(a => !a)}
-              className="px-4 py-2 bg-blue-800 hover:bg-blue-900 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              {adding ? 'Cancel' : '+ Add Child'}
-            </button>
+            <button onClick={openModal} className="px-4 py-2 bg-blue-800 hover:bg-blue-900 text-white text-sm font-medium rounded-lg transition-colors">+ Add Child</button>
           )}
         </div>
       </div>
 
-      {bulkResult && (
-        <div className="print:hidden mb-4 bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-800">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <strong>{bulkResult.promoted} child{bulkResult.promoted !== 1 ? 'ren' : ''} promoted</strong> to active profiles.
-              {bulkResult.skipped.length > 0 && (
-                <div className="mt-1.5 text-amber-700">
-                  {bulkResult.skipped.length} skipped: {bulkResult.skipped.map(s => `${s.name} (${s.reason})`).join(', ')}
+      {/* Cohort sections */}
+      {cohorts.map(cohort => (
+        <CohortSection
+          key={cohort.intakeYear}
+          intakeYear={cohort.intakeYear}
+          returningChildren={cohort.returningChildren}
+          newStarters={cohort.newStarters}
+          leavingChildren={cohort.leavingChildren}
+          isAdmin={isAdmin}
+          staffData={staffData}
+        />
+      ))}
+
+      {/* Add Child wizard modal */}
+      {modalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl w-full max-w-2xl my-4">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div>
+                <h3 className="font-semibold text-gray-800">{STEP_TITLE[step]}</h3>
+                {step !== 'year' && step !== 'fees' && (
+                  <p className="text-xs text-gray-400 mt-0.5">Step {stepIndex} of {STEPS.length - 2} · September {pickedYear}</p>
+                )}
+              </div>
+              <button type="button" onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+            </div>
+
+            <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+
+              {/* ── Step: Year ───────────────────────────────────────────── */}
+              {step === 'year' && (
+                <div>
+                  <p className="text-sm text-gray-500 mb-4">Which intake is this child starting in?</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {cohorts.map(c => (
+                      <button
+                        key={c.intakeYear}
+                        type="button"
+                        onClick={() => { setPickedYear(c.intakeYear); setStep('child') }}
+                        className={`px-4 py-4 rounded-lg border text-center transition-colors ${pickedYear === c.intakeYear ? 'border-blue-600 bg-blue-50' : 'border-gray-300 hover:border-blue-600 hover:bg-blue-50'}`}
+                      >
+                        <div className="text-lg font-bold text-gray-900">September {c.intakeYear}</div>
+                        <div className="text-xs text-gray-500 mt-1">{c.newStarters.length} new starter{c.newStarters.length !== 1 ? 's' : ''} so far</div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
-            </div>
-            <button onClick={() => setBulkResult(null)} className="text-xs text-green-500 hover:text-green-700 shrink-0">Dismiss</button>
-          </div>
-        </div>
-      )}
 
-      {/* Print header */}
-      <div className="hidden print:flex justify-between items-baseline mb-3">
-        <div className="font-bold text-sm">Winton Pre-School — September {intakeYear} Enrolments</div>
-        <div className="text-sm">{totalCount} children</div>
-      </div>
-
-      {/* Add form */}
-      {adding && (
-        <div className="print:hidden bg-white rounded-xl border border-gray-200 p-5 space-y-4 mb-4">
-          <h2 className="text-sm font-semibold text-gray-700">Add new starter</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">Child first name *</label>
-              <input value={form.childFirstName} onChange={e => setForm(f => ({ ...f, childFirstName: e.target.value }))} className={inputCls} />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">Child last name *</label>
-              <input value={form.childLastName} onChange={e => setForm(f => ({ ...f, childLastName: e.target.value }))} className={inputCls} />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">Date of birth</label>
-              <input type="date" value={form.dateOfBirth} onChange={e => setForm(f => ({ ...f, dateOfBirth: e.target.value }))} className={inputCls} />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">Parent / carer name *</label>
-              <input value={form.parentCarerName} onChange={e => setForm(f => ({ ...f, parentCarerName: e.target.value }))} className={inputCls} />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">Phone</label>
-              <input value={form.contactPhone} onChange={e => setForm(f => ({ ...f, contactPhone: e.target.value }))} className={inputCls} />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">Email</label>
-              <input type="email" value={form.contactEmail} onChange={e => setForm(f => ({ ...f, contactEmail: e.target.value }))} className={inputCls} />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-600 mb-1">
-              Start date <span className="font-normal text-gray-400">(only if different from the standard September intake)</span>
-            </label>
-            <input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className={`${inputCls} max-w-xs`} />
-          </div>
-
-          {/* Days & sessions picker */}
-          <div>
-            <label className="block text-xs text-gray-600 mb-2">Days & sessions needed</label>
-            <div className="flex gap-4 flex-wrap">
-              {DAYS.map(day => (
-                <div key={day} className="flex flex-col items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => toggleFormDay(day)}
-                    className={`w-14 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
-                      day in form.daysSessions
-                        ? 'bg-[#020e2f] text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    {DAY_LABEL[day]}
-                  </button>
-                  {day in form.daysSessions && (
-                    <div className="flex flex-col gap-1">
-                      {(['morning', 'afternoon', 'full_day'] as const).map(st => (
-                        <button
-                          key={st}
-                          type="button"
-                          onClick={() => setFormSession(day, st)}
-                          className={`w-14 py-1 rounded text-xs font-medium transition-colors ${
-                            form.daysSessions[day] === st
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                          }`}
-                        >
-                          {SESSION_LABEL[st]}
+              {/* ── Step: Child's Details ────────────────────────────────── */}
+              {step === 'child' && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Child first name *" value={form.childFirstName} onChange={v => set('childFirstName', v)} />
+                    <Field label="Child last name *" value={form.childLastName} onChange={v => set('childLastName', v)} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Gender</label>
+                    <div className="flex gap-2">
+                      {['male', 'female'].map(g => (
+                        <button key={g} type="button" onClick={() => set('childGender', g)}
+                          className={`px-4 py-1.5 rounded-lg text-sm font-medium border capitalize transition-colors ${form.childGender === g ? 'bg-[#020e2f] text-white border-[#020e2f]' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+                          {g}
                         </button>
                       ))}
                     </div>
+                  </div>
+                  <Field label="Date of birth" type="date" value={form.dateOfBirth} onChange={v => set('dateOfBirth', v)} />
+                  <Field label="Full address" value={form.childAddress} onChange={v => set('childAddress', v)} />
+                  <Field label="Postcode" value={form.childPostcode} onChange={v => set('childPostcode', v)} />
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" checked={form.birthCertificateSeen} onChange={e => set('birthCertificateSeen', e.target.checked)} className="rounded" />
+                    <label className="text-sm text-gray-700">Birth certificate seen</label>
+                  </div>
+                  <Field label="Start date (only if different from the standard September intake)" type="date" value={form.startDate} onChange={v => set('startDate', v)} />
+                </>
+              )}
+
+              {/* ── Step: Family Details ─────────────────────────────────── */}
+              {step === 'family' && (
+                <>
+                  <p className="text-sm font-semibold text-gray-700">Parent 1</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Name *" value={form.parent1Name} onChange={v => set('parent1Name', v)} />
+                    <Field label="Relationship to child" value={form.parent1Relationship} onChange={v => set('parent1Relationship', v)} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Daytime number" value={form.parent1DaytimePhone} onChange={v => set('parent1DaytimePhone', v)} />
+                    <Field label="Mobile" value={form.parent1Mobile} onChange={v => set('parent1Mobile', v)} />
+                  </div>
+                  <Field label="Email address" type="email" value={form.parent1Email} onChange={v => set('parent1Email', v)} />
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" checked={form.parent1ParentalResponsibility} onChange={e => set('parent1ParentalResponsibility', e.target.checked)} className="rounded" />
+                    <label className="text-sm text-gray-700">Has parental responsibility</label>
+                  </div>
+
+                  <p className="text-sm font-semibold text-gray-700 pt-3 border-t border-gray-100">Parent 2</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Name" value={form.parent2Name} onChange={v => set('parent2Name', v)} />
+                    <Field label="Relationship to child" value={form.parent2Relationship} onChange={v => set('parent2Relationship', v)} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Daytime number" value={form.parent2DaytimePhone} onChange={v => set('parent2DaytimePhone', v)} />
+                    <Field label="Mobile" value={form.parent2Mobile} onChange={v => set('parent2Mobile', v)} />
+                  </div>
+                  <Field label="Email address" type="email" value={form.parent2Email} onChange={v => set('parent2Email', v)} />
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" checked={form.parent2ParentalResponsibility} onChange={e => set('parent2ParentalResponsibility', e.target.checked)} className="rounded" />
+                    <label className="text-sm text-gray-700">Has parental responsibility</label>
+                  </div>
+                </>
+              )}
+
+              {/* ── Step: Emergency Contacts ──────────────────────────────── */}
+              {step === 'emergency' && (
+                <>
+                  <p className="text-xs text-gray-400">Not Parent 1 or 2 — doesn&apos;t need to live locally.</p>
+                  <p className="text-sm font-semibold text-gray-700">Emergency contact 1</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Name" value={form.ec1Name} onChange={v => set('ec1Name', v)} />
+                    <Field label="Relationship to child" value={form.ec1Relationship} onChange={v => set('ec1Relationship', v)} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Daytime number" value={form.ec1DaytimePhone} onChange={v => set('ec1DaytimePhone', v)} />
+                    <Field label="Mobile" value={form.ec1Mobile} onChange={v => set('ec1Mobile', v)} />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" checked={form.ec1CanCollect} onChange={e => set('ec1CanCollect', e.target.checked)} className="rounded" />
+                    <label className="text-sm text-gray-700">Has permission to collect child</label>
+                  </div>
+
+                  <p className="text-sm font-semibold text-gray-700 pt-3 border-t border-gray-100">Emergency contact 2</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Name" value={form.ec2Name} onChange={v => set('ec2Name', v)} />
+                    <Field label="Relationship to child" value={form.ec2Relationship} onChange={v => set('ec2Relationship', v)} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Daytime number" value={form.ec2DaytimePhone} onChange={v => set('ec2DaytimePhone', v)} />
+                    <Field label="Mobile" value={form.ec2Mobile} onChange={v => set('ec2Mobile', v)} />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" checked={form.ec2CanCollect} onChange={e => set('ec2CanCollect', e.target.checked)} className="rounded" />
+                    <label className="text-sm text-gray-700">Has permission to collect child</label>
+                  </div>
+
+                  <Field label="Password for collection" value={form.collectionPassword} onChange={v => set('collectionPassword', v)} />
+                </>
+              )}
+
+              {/* ── Step: Funding & Sessions ──────────────────────────────── */}
+              {step === 'funding' && (
+                <>
+                  <div>
+                    <label className={labelCls}>Funding</label>
+                    <select value={form.fundingType} onChange={e => set('fundingType', e.target.value)} className={inputCls}>
+                      {FUNDING_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                  {(form.fundingType === 'extended30' || form.fundingType === 'two_year') && (
+                    <div className="border border-gray-200 rounded-lg p-3 space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Funding code" value={form.fundingCode} onChange={v => set('fundingCode', v)} />
+                        <Field label="Code valid from" type="date" value={form.fundingCodeDate} onChange={v => set('fundingCodeDate', v)} />
+                      </div>
+                      <p className="text-sm font-semibold text-gray-700">Parent who applied for the code</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Name" value={form.fundingApplicantName} onChange={v => set('fundingApplicantName', v)} />
+                        <Field label="Date of birth" type="date" value={form.fundingApplicantDob} onChange={v => set('fundingApplicantDob', v)} />
+                      </div>
+                      <Field label="NI number" value={form.fundingApplicantNi} onChange={v => set('fundingApplicantNi', v)} />
+                    </div>
                   )}
+                  <TextArea label="Funding notes" value={form.fundingNotes} onChange={v => set('fundingNotes', v)} />
+
+                  <div>
+                    <label className={`${labelCls} mb-2`}>Days & sessions needed</label>
+                    <div className="flex gap-4 flex-wrap">
+                      {DAYS.map(day => (
+                        <div key={day} className="flex flex-col items-center gap-1.5">
+                          <button type="button" onClick={() => toggleFormDay(day)}
+                            className={`w-14 py-1.5 rounded-lg text-sm font-semibold transition-colors ${day in form.daysSessions ? 'bg-[#020e2f] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                            {DAY_LABEL[day]}
+                          </button>
+                          {day in form.daysSessions && (
+                            <div className="flex flex-col gap-1">
+                              {(['morning', 'afternoon', 'full_day'] as const).map(st => (
+                                <button key={st} type="button" onClick={() => setFormSession(day, st)}
+                                  className={`w-14 py-1 rounded text-xs font-medium transition-colors ${form.daysSessions[day] === st ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                                  {SESSION_LABEL[st]}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* ── Step: About Your Child ────────────────────────────────── */}
+              {step === 'about' && (
+                <>
+                  <TextArea label="What does your child like to play with?" value={form.childInterests} onChange={v => set('childInterests', v)} rows={3} />
+                  <YesNoNote
+                    label="Have they attended, or do they currently attend, another setting?"
+                    value={form.attendsOtherSetting} onChange={v => set('attendsOtherSetting', v)}
+                    note={form.attendsOtherSettingDetails} onNoteChange={v => set('attendsOtherSettingDetails', v)}
+                    notePlaceholder="Which setting, and any details…"
+                  />
+                  <YesNoNote
+                    label="As a parent, do you have any concerns or worries about your child?"
+                    value={form.parentConcerns} onChange={v => set('parentConcerns', v)}
+                    note={form.parentConcernsDetails} onNoteChange={v => set('parentConcernsDetails', v)}
+                  />
+                </>
+              )}
+
+              {/* ── Step: Health Questions ────────────────────────────────── */}
+              {step === 'health' && (
+                <>
+                  <YesNo label="Are your child's immunisations up to date?" value={form.immunisationsUpToDate ?? false} onChange={v => set('immunisationsUpToDate', v)} />
+                  <SignaturePad label="Parent signature" onChange={v => set('immunisationsSignature', v)} />
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Doctor's name" value={form.doctorName} onChange={v => set('doctorName', v)} />
+                    <Field label="Practice name" value={form.doctorPracticeName} onChange={v => set('doctorPracticeName', v)} />
+                  </div>
+                  <Field label="Practice address" value={form.doctorPracticeAddress} onChange={v => set('doctorPracticeAddress', v)} />
+                  <Field label="Doctor's number" value={form.doctorPhone} onChange={v => set('doctorPhone', v)} />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Dentist surgery name" value={form.dentistName} onChange={v => set('dentistName', v)} />
+                    <Field label="Dentist number" value={form.dentistPhone} onChange={v => set('dentistPhone', v)} />
+                  </div>
+
+                  <YesNoNote
+                    label="Any other professionals involved with your child?"
+                    value={form.otherProfessionalsInvolved} onChange={v => set('otherProfessionalsInvolved', v)}
+                    note={form.otherProfessionalsDetails} onNoteChange={v => set('otherProfessionalsDetails', v)}
+                  />
+                  <YesNoNote
+                    label="Does your child suffer from any known medical conditions, allergies or special dietary needs?"
+                    value={form.hasMedicalConditions} onChange={v => set('hasMedicalConditions', v)}
+                    note={form.medicalConditionsDetails} onNoteChange={v => set('medicalConditionsDetails', v)}
+                  />
+
+                  <div>
+                    <YesNo
+                      label="Does your child regularly take any medication?"
+                      value={form.takesMedication}
+                      onChange={v => { set('takesMedication', v); setMedFormOpen(v) }}
+                    />
+                    {form.takesMedication && (
+                      <div className="mt-2">
+                        {!medFormOpen ? (
+                          <button type="button" onClick={() => setMedFormOpen(true)} className="text-xs text-blue-700 hover:underline">
+                            {form.medicationForm.name ? 'Edit prescribed medicine details' : 'Open Prescribed Medicine form'}
+                          </button>
+                        ) : (
+                          <div className="border border-gray-200 rounded-lg p-3 space-y-3 bg-gray-50">
+                            <p className="text-xs font-semibold text-gray-600">Prescribed Medicine Form</p>
+                            <div className="grid grid-cols-2 gap-3">
+                              <Field label="Condition / diagnosis" value={form.medicationForm.conditionDiagnosis} onChange={v => set('medicationForm', { ...form.medicationForm, conditionDiagnosis: v })} />
+                              <Field label="Medication name" value={form.medicationForm.name} onChange={v => set('medicationForm', { ...form.medicationForm, name: v })} />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <Field label="Dosage" value={form.medicationForm.dosage} onChange={v => set('medicationForm', { ...form.medicationForm, dosage: v })} />
+                              <Field label="Frequency" value={form.medicationForm.frequency} onChange={v => set('medicationForm', { ...form.medicationForm, frequency: v })} />
+                            </div>
+                            <TextArea label="Symptoms" value={form.medicationForm.conditionSymptoms} onChange={v => set('medicationForm', { ...form.medicationForm, conditionSymptoms: v })} />
+                            <div className="grid grid-cols-2 gap-3">
+                              <Field label="Doctor contact name" value={form.medicationForm.doctorContactName} onChange={v => set('medicationForm', { ...form.medicationForm, doctorContactName: v })} />
+                              <Field label="Doctor contact phone" value={form.medicationForm.doctorContactPhone} onChange={v => set('medicationForm', { ...form.medicationForm, doctorContactPhone: v })} />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <Field label="Hospital contact name" value={form.medicationForm.hospitalContactName} onChange={v => set('medicationForm', { ...form.medicationForm, hospitalContactName: v })} />
+                              <Field label="Hospital contact phone" value={form.medicationForm.hospitalContactPhone} onChange={v => set('medicationForm', { ...form.medicationForm, hospitalContactPhone: v })} />
+                            </div>
+                            <Field label="Administered at home" value={form.medicationForm.administeredAtHome} onChange={v => set('medicationForm', { ...form.medicationForm, administeredAtHome: v })} />
+                            <div className="grid grid-cols-3 gap-3">
+                              <Field label="Duration of treatment" value={form.medicationForm.durationOfTreatment} onChange={v => set('medicationForm', { ...form.medicationForm, durationOfTreatment: v })} />
+                              <Field label="Date dispensed" type="date" value={form.medicationForm.dateDispensed} onChange={v => set('medicationForm', { ...form.medicationForm, dateDispensed: v })} />
+                              <Field label="Expiry date" type="date" value={form.medicationForm.expiryDate} onChange={v => set('medicationForm', { ...form.medicationForm, expiryDate: v })} />
+                            </div>
+                            <Field label="Storage" value={form.medicationForm.storage} onChange={v => set('medicationForm', { ...form.medicationForm, storage: v })} />
+                            <Field label="Special precautions" value={form.medicationForm.specialPrecautions} onChange={v => set('medicationForm', { ...form.medicationForm, specialPrecautions: v })} />
+                            <Field label="Possible side effects" value={form.medicationForm.possibleSideEffects} onChange={v => set('medicationForm', { ...form.medicationForm, possibleSideEffects: v })} />
+                            <TextArea label="Emergency procedures" value={form.medicationForm.emergencyProcedures} onChange={v => set('medicationForm', { ...form.medicationForm, emergencyProcedures: v })} />
+                            <Field label="Parent print name" value={form.medicationForm.parentPrintName} onChange={v => set('medicationForm', { ...form.medicationForm, parentPrintName: v })} />
+                            <SignaturePad label="Parent signature" onChange={v => set('medicationForm', { ...form.medicationForm, parentSignature: v })} />
+                            <p className="text-[11px] text-gray-400">Saved with this enrolment. A staff signature will be added on the full Prescribed Medicine form once {form.childFirstName || 'the child'} starts.</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* ── Step: Ethnicity, Culture & Language ───────────────────── */}
+              {step === 'culture' && (
+                <>
+                  <Field label="How would you describe your child's ethnicity or cultural background?" value={form.ethnicity} onChange={v => set('ethnicity', v)} />
+                  <Field label="Family religion (if applicable)" value={form.religion} onChange={v => set('religion', v)} />
+                  <TextArea label="Are there any special occasions celebrated in your culture/home that your child will be taking part in and you would like acknowledged and celebrated whilst in our setting?" value={form.culturalCelebrations} onChange={v => set('culturalCelebrations', v)} rows={3} />
+                  <Field label="What languages are spoken at home?" value={form.languagesSpokenAtHome} onChange={v => set('languagesSpokenAtHome', v)} />
+                  <Field label="What is their main language?" value={form.mainLanguage} onChange={v => set('mainLanguage', v)} />
+                  <Field label="How did you hear about our school?" value={form.hearAboutUs} onChange={v => set('hearAboutUs', v)} />
+                  <TextArea label="Any other notes" value={form.notes} onChange={v => set('notes', v)} />
+                </>
+              )}
+
+              {/* ── Step: Policies ─────────────────────────────────────────── */}
+              {step === 'policies' && !signingManager && (
+                policies.length === 0 ? (
+                  <p className="text-sm text-gray-400">No policies have been added yet. Ask an admin to add your policies, then come back to this step — for now you can continue.</p>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xs text-gray-500 mb-1">Open each policy to read and sign it. Once all are signed, a member of staff signs once at the end.</p>
+                    {policies.map(p => {
+                      const signed = isPolicySigned(p.id) ? signatures[p.id] : null
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setActivePolicyId(p.id)}
+                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg border text-left transition-colors ${signed ? 'border-green-300 bg-green-50 hover:bg-green-100' : 'border-gray-200 hover:bg-gray-50'}`}
+                        >
+                          <span className="text-sm font-medium text-gray-800">{p.name}</span>
+                          {signed
+                            ? <span className="text-xs text-green-700 font-medium shrink-0 ml-2">✓ Signed by {signed.parentPrintName}</span>
+                            : <span className="text-xs text-blue-700 font-medium shrink-0 ml-2">Open to read & sign →</span>
+                          }
+                        </button>
+                      )
+                    })}
+                    {policies.every(p => isPolicySigned(p.id)) && (
+                      <button
+                        type="button"
+                        onClick={() => setSigningManager(true)}
+                        className="mt-2 w-full px-3 py-2.5 rounded-lg border border-blue-300 bg-blue-50 text-blue-800 text-sm font-medium hover:bg-blue-100"
+                      >
+                        All policies signed — staff sign-off →
+                      </button>
+                    )}
+                  </div>
+                )
+              )}
+
+              {/* ── Step: Policies — manager sign-off ─────────────────────── */}
+              {step === 'policies' && signingManager && (
+                <div className="space-y-3">
+                  <button type="button" onClick={() => setSigningManager(false)} className="text-xs text-blue-700 hover:underline">← Back to policies</button>
+                  <p className="text-sm text-gray-600">
+                    {policies.length} polic{policies.length !== 1 ? 'ies' : 'y'} signed by {form.parent1Name || 'the parent/carer'}. One staff sign-off covers all of them.
+                  </p>
+                  <Field label="Staff member name" value={managerName} onChange={setManagerName} />
+                  <SignaturePad label="Staff signature" onChange={setManagerSignature} />
                 </div>
-              ))}
+              )}
+
+              {/* ── Policy document popup ─────────────────────────────────── */}
+              {activePolicyId && (() => {
+                const p = policies.find(pol => pol.id === activePolicyId)
+                if (!p) return null
+                const draft = signatures[p.id] ?? { parentPrintName: '', parentSignature: '', notes: '' }
+                return (
+                  <div className="fixed inset-0 bg-black/60 z-[60] flex items-start justify-center p-4 overflow-y-auto">
+                    <div className="bg-white w-full max-w-2xl my-4 rounded" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                      <div className="flex items-center justify-between px-6 py-4 border-b-2 border-[#020e2f]">
+                        <div>
+                          <div className="text-xs text-gray-400 uppercase tracking-wide">Winton Pre-School Little Explorers</div>
+                          <h3 className="text-base font-bold text-[#020e2f]">{p.name}</h3>
+                        </div>
+                        <button type="button" onClick={() => setActivePolicyId(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+                      </div>
+                      <div className="px-6 py-4 max-h-[50vh] overflow-y-auto text-sm text-gray-800 whitespace-pre-wrap leading-relaxed border-b border-gray-100">
+                        {p.content}
+                      </div>
+                      <div className="px-6 py-4 space-y-3 bg-gray-50">
+                        {p.name.toLowerCase().includes('information sharing') && (
+                          <TextArea
+                            label="Exceptions (optional)"
+                            value={draft.notes}
+                            onChange={v => setSignatures(s => ({ ...s, [p.id]: { ...draft, notes: v } }))}
+                          />
+                        )}
+                        <Field label="Parent / carer print name" value={draft.parentPrintName} onChange={v => setSignatures(s => ({ ...s, [p.id]: { ...draft, parentPrintName: v } }))} />
+                        <SignaturePad label="Parent / carer signature" onChange={sig => setSignatures(s => ({ ...s, [p.id]: { ...draft, parentSignature: sig } }))} />
+                        <div className="flex gap-3 pt-1">
+                          <button
+                            type="button"
+                            disabled={!draft.parentPrintName.trim() || !draft.parentSignature}
+                            onClick={() => setActivePolicyId(null)}
+                            className="px-4 py-2 bg-blue-800 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50"
+                          >
+                            Sign & close
+                          </button>
+                          <button type="button" onClick={() => setActivePolicyId(null)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Close without signing</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* ── Step: Fees ─────────────────────────────────────────────── */}
+              {step === 'fees' && savedEnrolment && (
+                <div className="space-y-3">
+                  <p className="text-sm text-green-700 font-medium">✓ {form.childFirstName} {form.childLastName} saved to September {pickedYear} enrolments.</p>
+                  <div className="flex items-start gap-3 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !savedEnrolment.welcomeFeePaid
+                        setSavedEnrolment(s => s ? { ...s, welcomeFeePaid: next } : s)
+                        updateEnrolmentFee(savedEnrolment.id, 'welcomeFeePaid', next)
+                      }}
+                      className={`flex items-start gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors text-left ${savedEnrolment.welcomeFeePaid ? 'bg-green-50 border-green-300 text-green-700' : 'bg-white border-gray-300 text-gray-500'}`}
+                    >
+                      <span className="mt-0.5">{savedEnrolment.welcomeFeePaid ? '✓' : '○'}</span>
+                      <div>
+                        <div>Welcome fee £50</div>
+                        <div className="text-[10px] opacity-60 font-normal mt-0.5">3 settle-in sessions, home visit &amp; t-shirt · non-refundable</div>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !savedEnrolment.depositPaid
+                        setSavedEnrolment(s => s ? { ...s, depositPaid: next } : s)
+                        updateEnrolmentFee(savedEnrolment.id, 'depositPaid', next)
+                      }}
+                      className={`flex items-start gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors text-left ${savedEnrolment.depositPaid ? 'bg-green-50 border-green-300 text-green-700' : 'bg-white border-gray-300 text-gray-500'}`}
+                    >
+                      <span className="mt-0.5">{savedEnrolment.depositPaid ? '✓' : '○'}</span>
+                      <div>
+                        <div>Deposit £50 per term</div>
+                        <div className="text-[10px] opacity-60 font-normal mt-0.5">paid in advance · deducted from first invoice</div>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const html = generateEnrolmentInvoiceHTML({
+                          firstName: form.childFirstName, lastName: form.childLastName,
+                          parentCarerName: form.parent1Name, contactEmail: form.parent1Email || null,
+                          welcomeFeePaid: savedEnrolment.welcomeFeePaid, depositPaid: savedEnrolment.depositPaid,
+                        }, pickedYear!)
+                        const blob = new Blob([html], { type: 'text/html' })
+                        const url = URL.createObjectURL(blob)
+                        window.open(url, '_blank')
+                        setTimeout(() => URL.revokeObjectURL(url), 15000)
+                      }}
+                      className="text-xs text-blue-700 border border-blue-200 rounded-lg px-3 py-2 hover:bg-blue-50 transition-colors"
+                    >
+                      Generate invoice
+                    </button>
+                  </div>
+
+                  <div className="border-t border-gray-100 pt-3 space-y-3">
+                    <p className="text-xs font-semibold text-gray-600">Welcome pack &amp; settling in</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field
+                        label="Welcome pack given" type="date"
+                        value={savedEnrolment.welcomePackGivenAt}
+                        onChange={v => { setSavedEnrolment(s => s ? { ...s, welcomePackGivenAt: v } : s); updateEnrolmentAdminField(savedEnrolment.id, 'welcomePackGivenAt', v) }}
+                      />
+                      <Field
+                        label="Polo shirt given" type="date"
+                        value={savedEnrolment.tshirtGivenAt}
+                        onChange={v => { setSavedEnrolment(s => s ? { ...s, tshirtGivenAt: v } : s); updateEnrolmentAdminField(savedEnrolment.id, 'tshirtGivenAt', v) }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-400">Settling-in sessions — can be left blank and filled in later once booked.</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <Field
+                        label="Session 1" type="date"
+                        value={savedEnrolment.settlingSession1}
+                        onChange={v => { setSavedEnrolment(s => s ? { ...s, settlingSession1: v } : s); updateEnrolmentAdminField(savedEnrolment.id, 'settlingSession1', v) }}
+                      />
+                      <Field
+                        label="Session 2" type="date"
+                        value={savedEnrolment.settlingSession2}
+                        onChange={v => { setSavedEnrolment(s => s ? { ...s, settlingSession2: v } : s); updateEnrolmentAdminField(savedEnrolment.id, 'settlingSession2', v) }}
+                      />
+                      <Field
+                        label="Session 3" type="date"
+                        value={savedEnrolment.settlingSession3}
+                        onChange={v => { setSavedEnrolment(s => s ? { ...s, settlingSession3: v } : s); updateEnrolmentAdminField(savedEnrolment.id, 'settlingSession3', v) }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer nav */}
+            <div className="flex items-center justify-between gap-3 px-5 py-4 border-t border-gray-100">
+              <div>
+                {step !== 'year' && step !== 'fees' && (
+                  <button type="button" onClick={goBack} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">← Back</button>
+                )}
+              </div>
+              <div className="flex gap-3">
+                {step === 'fees' ? (
+                  <button type="button" onClick={closeModal} className="px-4 py-2 bg-blue-800 hover:bg-blue-900 text-white text-sm rounded-lg">Done</button>
+                ) : step === 'policies' ? (
+                  <button
+                    type="button"
+                    onClick={handleSaveAndContinueToFees}
+                    disabled={!canProceed || saving}
+                    className="px-4 py-2 bg-blue-800 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50"
+                  >
+                    {saving ? 'Saving…' : 'Save & continue'}
+                  </button>
+                ) : step !== 'year' ? (
+                  <button type="button" onClick={goNext} disabled={!canProceed} className="px-4 py-2 bg-blue-800 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50">Next →</button>
+                ) : null}
+              </div>
             </div>
           </div>
-
-          <div>
-            <label className="block text-xs text-gray-600 mb-1">Notes</label>
-            <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} className={inputCls} />
-          </div>
-          <button
-            onClick={handleAdd}
-            disabled={saving || !form.childFirstName || !form.childLastName || !form.parentCarerName}
-            className="px-4 py-2 bg-blue-800 hover:bg-blue-900 text-white text-sm rounded-lg disabled:opacity-50"
-          >
-            {saving ? 'Saving...' : 'Add to enrolments'}
-          </button>
         </div>
       )}
-
-      {/* Table */}
-      <div className="overflow-x-auto bg-white rounded-xl border border-gray-200 print:rounded-none print:border-none print:overflow-visible">
-        <table className="w-full border-collapse text-xs">
-          <thead>
-            <tr className="bg-[#020e2f] text-white">
-              <th className={`${thLeft} w-8`}>No.</th>
-              <th className={`${thLeft} min-w-[80px]`}>First Name</th>
-              <th className={`${thLeft} min-w-[90px]`}>Last Name</th>
-              <th className={`${thLeft} w-[110px]`}>D.O.B (Age in Sept)</th>
-              {DAYS.map(day => (
-                <th key={day} className={`${thBase} w-10`}>{DAY_LABEL[day]}</th>
-              ))}
-              <th className={`${thBase} w-12`}>Total Wk</th>
-            </tr>
-          </thead>
-          <tbody>
-
-            {/* Returning children */}
-            {enrichedReturning.length > 0 && (
-              <tr className="bg-[#eef2f7]">
-                <td colSpan={10} className="px-3 py-1 text-xs font-bold text-[#020e2f] uppercase tracking-wider border-b border-gray-200">
-                  Returning Children — {enrichedReturning.length}
-                </td>
-              </tr>
-            )}
-            {enrichedReturning.map(child => {
-              rowNum++
-              return (
-                <tr key={child.id} className="border-b border-gray-100 even:bg-gray-50/40">
-                  <td className={`${td} text-center text-gray-400 font-medium`}>{rowNum}</td>
-                  <td className={`${td} font-semibold text-gray-900`}>{child.firstName}</td>
-                  <td className={`${td} text-gray-800`}>{child.lastName}</td>
-                  <td className={`${td} text-gray-700 whitespace-nowrap`}>
-                    {fmtDob(child.dateOfBirth)}
-                    {child.age !== null && <span className="text-gray-400 ml-1">({child.age})</span>}
-                  </td>
-                  {DAYS.map(day => (
-                    <td key={day} className={`${tdCenter} font-medium`}>
-                      {child.dayHours[day]
-                        ? <span className="text-gray-800">{child.dayHours[day]}</span>
-                        : <span className="text-gray-200">—</span>
-                      }
-                    </td>
-                  ))}
-                  <td className={`${tdCenter} font-bold text-gray-800`}>
-                    {child.totalHours || <span className="text-gray-300">—</span>}
-                  </td>
-                </tr>
-              )
-            })}
-
-            {/* New starters */}
-            {enrichedNew.length > 0 && (
-              <tr className="bg-[#eef2f7]">
-                <td colSpan={10} className="px-3 py-1 text-xs font-bold text-[#020e2f] uppercase tracking-wider border-b border-gray-200">
-                  New Starters — {enrichedNew.length}
-                </td>
-              </tr>
-            )}
-            {enrichedNew.map(child => {
-              rowNum++
-              const isExpanded = expandedId === child.id
-              return (
-                <React.Fragment key={child.id}>
-                  <tr
-                    className="border-b border-gray-100 even:bg-gray-50/40 cursor-pointer hover:bg-blue-50/40 transition-colors"
-                    onClick={() => setExpandedId(isExpanded ? null : child.id)}
-                  >
-                    <td className={`${td} text-center text-gray-400 font-medium`}>{rowNum}</td>
-                    <td className={`${td} font-semibold text-gray-900`}>
-                      <span>{child.firstName}</span>
-                      {child.promotedChildId
-                        ? <span className="ml-1.5 text-[9px] font-bold bg-green-100 text-green-700 px-1.5 py-0.5 rounded uppercase tracking-wide">Started</span>
-                        : <span className="ml-1.5 text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase tracking-wide">New</span>
-                      }
-                      {child.startDate && (
-                        <span className="ml-1.5 text-[9px] font-bold bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded uppercase tracking-wide" title={`Starts ${fmtDob(child.startDate)}`}>
-                          Starts {fmtDob(child.startDate)}
-                        </span>
-                      )}
-                    </td>
-                    <td className={`${td} text-gray-800`}>{child.lastName}</td>
-                    <td className={`${td} text-gray-700 whitespace-nowrap`}>
-                      {fmtDob(child.dateOfBirth)}
-                      {child.age !== null && <span className="text-gray-400 ml-1">({child.age})</span>}
-                    </td>
-                    {DAYS.map(day => (
-                      <td key={day} className={`${tdCenter} font-medium`}>
-                        {child.dayHours[day]
-                          ? <span className="text-gray-800">{child.dayHours[day]}</span>
-                          : <span className="text-gray-200">—</span>
-                        }
-                      </td>
-                    ))}
-                    <td className={`${tdCenter} font-bold text-gray-800`}>
-                      {child.totalHours || <span className="text-gray-300">—</span>}
-                    </td>
-                  </tr>
-                  {isExpanded && (
-                    <tr className="bg-amber-50 border-b border-amber-100 print:hidden">
-                      <td colSpan={10} className="px-4 py-3 space-y-3">
-                        {/* Contact details */}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-8 gap-y-1.5 text-xs">
-                          <div>
-                            <span className="text-gray-500">Parent / carer: </span>
-                            <span className="text-gray-900 font-medium">{child.parentCarerName}</span>
-                          </div>
-                          {child.contactPhone && (
-                            <div>
-                              <span className="text-gray-500">Phone: </span>
-                              <span className="text-gray-900">{child.contactPhone}</span>
-                            </div>
-                          )}
-                          {child.contactEmail && (
-                            <div>
-                              <span className="text-gray-500">Email: </span>
-                              <span className="text-gray-900">{child.contactEmail}</span>
-                            </div>
-                          )}
-                          {child.notes && (
-                            <div className="col-span-2 sm:col-span-3">
-                              <span className="text-gray-500">Notes: </span>
-                              <span className="text-gray-900">{child.notes}</span>
-                            </div>
-                          )}
-                          <div onClick={e => e.stopPropagation()}>
-                            <span className="text-gray-500">Start date: </span>
-                            {editingStartDate === child.id ? (
-                              <span className="inline-flex items-center gap-1.5">
-                                <input
-                                  type="date"
-                                  value={startDateDraft}
-                                  onChange={e => setStartDateDraft(e.target.value)}
-                                  className="border border-gray-300 rounded px-1.5 py-0.5 text-xs text-gray-900 bg-white"
-                                />
-                                <button onClick={() => handleSaveStartDate(child.id)} className="text-blue-700 hover:underline">Save</button>
-                                <button onClick={() => setEditingStartDate(null)} className="text-gray-400 hover:text-gray-600">Cancel</button>
-                              </span>
-                            ) : (
-                              <span className="text-gray-900">
-                                {child.startDate ? fmtDob(child.startDate) : 'Standard September intake'}
-                                {isAdmin && (
-                                  <button
-                                    onClick={() => { setEditingStartDate(child.id); setStartDateDraft(child.startDate ?? '') }}
-                                    className="ml-1.5 text-blue-700 hover:underline"
-                                  >
-                                    Edit
-                                  </button>
-                                )}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Fees */}
-                        <div className="flex items-start gap-3 flex-wrap">
-                          <span className="text-xs text-gray-500 font-medium mt-2">Fees:</span>
-                          <button
-                            type="button"
-                            onClick={e => { e.stopPropagation(); updateEnrolmentFee(child.id, 'welcomeFeePaid', !child.welcomeFeePaid) }}
-                            disabled={!isAdmin}
-                            className={`flex items-start gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors text-left ${
-                              child.welcomeFeePaid
-                                ? 'bg-green-50 border-green-300 text-green-700'
-                                : 'bg-white border-gray-300 text-gray-500'
-                            } ${isAdmin ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
-                          >
-                            <span className="mt-0.5">{child.welcomeFeePaid ? '✓' : '○'}</span>
-                            <div>
-                              <div>Welcome fee £50</div>
-                              <div className="text-[10px] opacity-60 font-normal mt-0.5">3 settle-in sessions, home visit &amp; t-shirt · non-refundable</div>
-                            </div>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={e => { e.stopPropagation(); updateEnrolmentFee(child.id, 'depositPaid', !child.depositPaid) }}
-                            disabled={!isAdmin}
-                            className={`flex items-start gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors text-left ${
-                              child.depositPaid
-                                ? 'bg-green-50 border-green-300 text-green-700'
-                                : 'bg-white border-gray-300 text-gray-500'
-                            } ${isAdmin ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
-                          >
-                            <span className="mt-0.5">{child.depositPaid ? '✓' : '○'}</span>
-                            <div>
-                              <div>Deposit £50 per term</div>
-                              <div className="text-[10px] opacity-60 font-normal mt-0.5">paid in advance · deducted from first invoice</div>
-                            </div>
-                          </button>
-                          <button
-                            onClick={e => {
-                              e.stopPropagation()
-                              const html = generateEnrolmentInvoiceHTML(child, intakeYear)
-                              const blob = new Blob([html], { type: 'text/html' })
-                              const url = URL.createObjectURL(blob)
-                              window.open(url, '_blank')
-                              setTimeout(() => URL.revokeObjectURL(url), 15000)
-                            }}
-                            className="text-xs text-blue-700 border border-blue-200 rounded-lg px-3 py-2 hover:bg-blue-50 transition-colors"
-                          >
-                            Generate invoice
-                          </button>
-                          {isAdmin && (
-                            <button
-                              onClick={e => { e.stopPropagation(); handleRemove(child.id, `${child.firstName} ${child.lastName}`) }}
-                              disabled={removing === child.id}
-                              className="ml-auto text-xs text-red-500 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-50 disabled:opacity-50"
-                            >
-                              {removing === child.id ? 'Removing...' : 'Remove'}
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Profile status */}
-                        <div className="flex items-center gap-3 pt-1 border-t border-amber-200">
-                          {child.promotedChildId ? (
-                            <a
-                              href={`/children/${child.promotedChildId}`}
-                              onClick={e => e.stopPropagation()}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-300 text-green-700 text-xs font-medium rounded-lg hover:bg-green-100 transition-colors"
-                            >
-                              ✓ Profile created — View child profile →
-                            </a>
-                          ) : isAdmin ? (
-                            <a
-                              href={`/enrolments/${child.id}/promote`}
-                              onClick={e => e.stopPropagation()}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#020e2f] text-white text-xs font-medium rounded-lg hover:bg-[#010922] transition-colors"
-                            >
-                              + Start child profile
-                            </a>
-                          ) : null}
-                        </div>
-
-                        {/* Keyworker confirmation */}
-                        {(() => {
-                          const hasDays = Object.keys(child.daysSessions).length > 0
-                          const confirmedStaff = child.confirmedKeyworkerId
-                            ? staffData.find(s => s.id === child.confirmedKeyworkerId)
-                            : null
-                          const isChanging = changingKw.has(child.id)
-                          const isConfirming = confirmingKw === child.id
-
-                          async function handleConfirm(e: React.MouseEvent, staffId: string) {
-                            e.stopPropagation()
-                            setConfirmingKw(child.id)
-                            await confirmEnrolmentKeyworker(child.id, staffId)
-                            setChangingKw(prev => { const s = new Set(prev); s.delete(child.id); return s })
-                            setConfirmingKw(null)
-                          }
-
-                          async function handleClear(e: React.MouseEvent) {
-                            e.stopPropagation()
-                            setConfirmingKw(child.id)
-                            await confirmEnrolmentKeyworker(child.id, null)
-                            setChangingKw(prev => { const s = new Set(prev); s.delete(child.id); return s })
-                            setConfirmingKw(null)
-                          }
-
-                          const requiredAbbrs = Object.keys(child.daysSessions).map(d => DAY_ABBR[d]).filter(Boolean)
-                          const ranked = staffData
-                            .map(s => {
-                              const staffDays = s.workingDays.split(',').map(d => d.trim())
-                              const matchingDays = Object.keys(child.daysSessions).filter(d => staffDays.includes(DAY_ABBR[d]))
-                              return { ...s, matchCount: matchingDays.length, matchingDays }
-                            })
-                            .filter(s => s.matchCount > 0)
-                            .sort((a, b) => b.matchCount - a.matchCount || a.keyChildrenCount - b.keyChildrenCount)
-
-                          return (
-                            <div className="pt-2 border-t border-amber-200">
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-semibold text-gray-600">Keyworker</span>
-                                {confirmedStaff && !isChanging && (
-                                  <button
-                                    onClick={e => { e.stopPropagation(); setChangingKw(prev => new Set([...prev, child.id])) }}
-                                    className="text-[10px] text-gray-400 hover:text-gray-600 underline"
-                                  >
-                                    Change
-                                  </button>
-                                )}
-                              </div>
-
-                              {/* Confirmed state */}
-                              {confirmedStaff && !isChanging && (
-                                <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-300 rounded-lg text-xs text-green-800 w-fit">
-                                  <span className="text-green-500">✓</span>
-                                  <span className="font-semibold">{confirmedStaff.name}</span>
-                                  <span className="text-green-600">
-                                    {ranked.find(r => r.id === confirmedStaff.id)?.matchingDays.map(d => DAY_LABEL[d]).join(', ')}
-                                  </span>
-                                </div>
-                              )}
-
-                              {/* Pick / change list */}
-                              {(!confirmedStaff || isChanging) && (
-                                <>
-                                  {!hasDays ? (
-                                    <p className="text-xs text-gray-400">Add days above to see suggestions.</p>
-                                  ) : ranked.length === 0 ? (
-                                    <p className="text-xs text-gray-400">No staff available for the selected days.</p>
-                                  ) : (
-                                    <div className="flex flex-wrap gap-2">
-                                      {ranked.map((s, i) => (
-                                        <button
-                                          key={s.id}
-                                          type="button"
-                                          disabled={isConfirming}
-                                          onClick={e => handleConfirm(e, s.id)}
-                                          className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs transition-colors disabled:opacity-50 ${
-                                            i === 0
-                                              ? 'bg-green-50 border-green-300 text-green-800 hover:bg-green-100'
-                                              : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                                          }`}
-                                        >
-                                          <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${
-                                            i === 0 ? 'bg-green-200 text-green-800' : 'bg-gray-100 text-gray-500'
-                                          }`}>{i + 1}</span>
-                                          <span className="font-medium">{s.name}</span>
-                                          <span className={i === 0 ? 'text-green-600' : 'text-gray-400'}>
-                                            {s.matchingDays.map(d => DAY_LABEL[d]).join(', ')}
-                                          </span>
-                                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                                            s.keyChildrenCount === 0
-                                              ? 'bg-blue-50 text-blue-600'
-                                              : s.keyChildrenCount <= 6
-                                              ? 'bg-green-100 text-green-700'
-                                              : s.keyChildrenCount <= 10
-                                              ? 'bg-amber-100 text-amber-700'
-                                              : 'bg-red-50 text-red-600'
-                                          }`}>
-                                            {s.keyChildrenCount} key {s.keyChildrenCount === 1 ? 'child' : 'children'}
-                                          </span>
-                                          {s.matchCount < requiredAbbrs.length && (
-                                            <span className="text-[10px] text-gray-400">({s.matchCount}/{requiredAbbrs.length} days)</span>
-                                          )}
-                                          {isConfirming && confirmingKw === child.id
-                                            ? <span className="text-[10px] text-gray-400">…</span>
-                                            : <span className={`text-[10px] font-semibold ${i === 0 ? 'text-green-700' : 'text-gray-400'}`}>Confirm →</span>
-                                          }
-                                        </button>
-                                      ))}
-                                    </div>
-                                  )}
-                                  {isChanging && (
-                                    <div className="flex items-center gap-3 mt-2">
-                                      <button
-                                        onClick={e => { e.stopPropagation(); setChangingKw(prev => { const s = new Set(prev); s.delete(child.id); return s }) }}
-                                        className="text-[10px] text-gray-400 hover:text-gray-600"
-                                      >
-                                        Cancel
-                                      </button>
-                                      <button
-                                        onClick={handleClear}
-                                        disabled={isConfirming}
-                                        className="text-[10px] text-red-400 hover:text-red-600 disabled:opacity-50"
-                                      >
-                                        Remove assignment
-                                      </button>
-                                    </div>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          )
-                        })()}
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              )
-            })}
-
-            {totalCount === 0 && (
-              <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-sm text-gray-400">
-                  No children enrolled for September {intakeYear} yet.
-                </td>
-              </tr>
-            )}
-
-            {/* Spacer */}
-            <tr><td colSpan={10} className="py-0.5 bg-gray-200" /></tr>
-
-            {/* Footer stats */}
-            {[
-              { label: 'Total Children', values: dayStats.map(s => s.total), cls: 'font-bold text-gray-800' },
-              { label: '2 Year Olds', values: dayStats.map(s => s.count2yr), cls: 'text-blue-700 font-medium' },
-              { label: 'Staff in Ratio', values: dayStats.map(s => s.staffInRatio), cls: 'text-gray-700 font-medium' },
-              { label: '1A (1-2-1)', values: dayStats.map(s => s.count1to1), cls: 'text-purple-700 font-medium' },
-              { label: 'Total Staff', values: dayStats.map(s => s.totalStaff), cls: 'font-bold text-gray-900' },
-            ].map(row => (
-              <tr key={row.label} className="bg-gray-50 border-t border-gray-200">
-                <td colSpan={4} className="px-3 py-1.5 text-xs font-semibold text-gray-700">{row.label}</td>
-                {row.values.map((v, i) => (
-                  <td key={i} className={`px-1 py-1.5 text-center text-xs border-r border-gray-200 ${row.cls}`}>
-                    {v > 0 ? v : <span className="text-gray-300">—</span>}
-                  </td>
-                ))}
-                <td />
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <p className="print:hidden mt-3 text-xs text-gray-400">
-        Returning children are auto-populated from active children not starting school in September {intakeYear}. Click a new starter row to see contact details.
-      </p>
     </div>
   )
 }

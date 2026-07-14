@@ -525,19 +525,136 @@ export const invoiceReminders = pgTable('invoice_reminders', {
 export const enrolments = pgTable('enrolments', {
   id: uuid('id').primaryKey().defaultRandom(),
   intakeYear: integer('intake_year').notNull().default(2027),
+
+  // ─── Child's details ──────────────────────────────────────────────────────
   childFirstName: text('child_first_name').notNull(),
   childLastName: text('child_last_name').notNull(),
+  childGender: text('child_gender'), // 'male' | 'female'
   dateOfBirth: date('date_of_birth'),
+  childAddress: text('child_address'),
+  childPostcode: text('child_postcode'),
+  birthCertificateSeen: boolean('birth_certificate_seen').notNull().default(false),
+
   startDate: date('start_date'), // if set, when this child is due to start (not necessarily the standard intake date)
+
+  // Legacy single-contact fields — kept so existing table/print/invoice views
+  // keep working unchanged; new enrolments also populate these from Parent 1.
   parentCarerName: text('parent_carer_name').notNull(),
   contactPhone: text('contact_phone'),
   contactEmail: text('contact_email'),
+
+  // ─── Family details ───────────────────────────────────────────────────────
+  parent1Name: text('parent1_name'),
+  parent1DaytimePhone: text('parent1_daytime_phone'),
+  parent1Mobile: text('parent1_mobile'),
+  parent1Email: text('parent1_email'),
+  parent1Relationship: text('parent1_relationship'),
+  parent1ParentalResponsibility: boolean('parent1_parental_responsibility').notNull().default(false),
+
+  parent2Name: text('parent2_name'),
+  parent2DaytimePhone: text('parent2_daytime_phone'),
+  parent2Mobile: text('parent2_mobile'),
+  parent2Email: text('parent2_email'),
+  parent2Relationship: text('parent2_relationship'),
+  parent2ParentalResponsibility: boolean('parent2_parental_responsibility').notNull().default(false),
+
+  // ─── Emergency contacts (not a parent — no locality requirement) ─────────
+  ec1Name: text('ec1_name'),
+  ec1DaytimePhone: text('ec1_daytime_phone'),
+  ec1Mobile: text('ec1_mobile'),
+  ec1Relationship: text('ec1_relationship'),
+  ec1CanCollect: boolean('ec1_can_collect').notNull().default(false),
+
+  ec2Name: text('ec2_name'),
+  ec2DaytimePhone: text('ec2_daytime_phone'),
+  ec2Mobile: text('ec2_mobile'),
+  ec2Relationship: text('ec2_relationship'),
+  ec2CanCollect: boolean('ec2_can_collect').notNull().default(false),
+
+  collectionPassword: text('collection_password'),
+
+  // ─── Funding & sessions ───────────────────────────────────────────────────
+  fundingType: text('funding_type'), // 'none' | 'universal15' | 'extended30' | 'two_year' | 'senif'
+  fundingCode: text('funding_code'),
+  fundingCodeDate: date('funding_code_date'),
+  fundingNotes: text('funding_notes'),
+  fundingApplicantName: text('funding_applicant_name'),
+  fundingApplicantDob: date('funding_applicant_dob'),
+  fundingApplicantNi: text('funding_applicant_ni'),
   // JSON: {"monday": "morning", "wednesday": "full_day", ...}
   daysSessions: text('days_sessions'),
+
+  // ─── About your child ─────────────────────────────────────────────────────
+  childInterests: text('child_interests'),
+  attendsOtherSetting: boolean('attends_other_setting').notNull().default(false),
+  attendsOtherSettingDetails: text('attends_other_setting_details'),
+  parentConcerns: boolean('parent_concerns').notNull().default(false),
+  parentConcernsDetails: text('parent_concerns_details'),
+
+  // ─── Health questions ──────────────────────────────────────────────────────
+  immunisationsUpToDate: boolean('immunisations_up_to_date'),
+  immunisationsSignature: text('immunisations_signature'),
+  doctorName: text('doctor_name'),
+  doctorPracticeName: text('doctor_practice_name'),
+  doctorPracticeAddress: text('doctor_practice_address'),
+  doctorPhone: text('doctor_phone'),
+  dentistName: text('dentist_name'),
+  dentistPhone: text('dentist_phone'),
+  otherProfessionalsInvolved: boolean('other_professionals_involved').notNull().default(false),
+  otherProfessionalsDetails: text('other_professionals_details'),
+  hasMedicalConditions: boolean('has_medical_conditions').notNull().default(false),
+  medicalConditionsDetails: text('medical_conditions_details'),
+  takesMedication: boolean('takes_medication').notNull().default(false),
+  // JSON snapshot of the Prescribed Medicine form, copied into a real
+  // medications row (with childId) once the child profile is created.
+  medicationFormData: text('medication_form_data'),
+
+  // ─── Ethnicity, culture & language ────────────────────────────────────────
+  ethnicity: text('ethnicity'),
+  religion: text('religion'),
+  culturalCelebrations: text('cultural_celebrations'),
+  languagesSpokenAtHome: text('languages_spoken_at_home'),
+  mainLanguage: text('main_language'),
+
+  hearAboutUs: text('hear_about_us'),
+
+  // One manager sign-off covers every policy signed for this enrolment —
+  // set once, at the end of the policies step, not per individual policy.
+  policiesManagerName: text('policies_manager_name'),
+  policiesManagerSignedAt: timestamp('policies_manager_signed_at'),
+
+  // Admin tracking — not policy signatures, just checklist dates staff fill in
+  welcomePackGivenAt: date('welcome_pack_given_at'),
+  tshirtGivenAt: date('tshirt_given_at'),
+  settlingSession1: date('settling_session_1'),
+  settlingSession2: date('settling_session_2'),
+  settlingSession3: date('settling_session_3'),
+
   notes: text('notes'),
   welcomeFeePaid: boolean('welcome_fee_paid').notNull().default(false),
   depositPaid: boolean('deposit_paid').notNull().default(false),
   confirmedKeyworkerId: uuid('confirmed_keyworker_id').references(() => users.id),
   promotedChildId: uuid('promoted_child_id').references(() => children.id),
   addedAt: timestamp('added_at').notNull().defaultNow(),
+})
+
+// ─── Policies ─────────────────────────────────────────────────────────────────
+
+export const policies = pgTable('policies', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  content: text('content').notNull(), // HTML/rich text of the policy
+  active: boolean('active').notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
+export const enrolmentPolicySignatures = pgTable('enrolment_policy_signatures', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  enrolmentId: uuid('enrolment_id').notNull().references(() => enrolments.id),
+  policyId: uuid('policy_id').notNull().references(() => policies.id),
+  parentPrintName: text('parent_print_name'),
+  parentSignature: text('parent_signature'), // signature pad data URL
+  parentSignedAt: timestamp('parent_signed_at'),
+  notes: text('notes'), // e.g. "Exceptions" free text on the Information Sharing policy
 })

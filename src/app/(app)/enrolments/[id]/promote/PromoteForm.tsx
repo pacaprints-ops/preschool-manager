@@ -18,11 +18,18 @@ type DefaultValues = {
   lastName: string
   dateOfBirth: string
   keyWorkerId: string
+  address: string
+  collectionPassword: string
+  hasMedicalConditions: boolean
+  medicalConditionsDetails: string
   contactName: string
+  contactRelationship: string
   contactPhone: string
   contactEmail: string
   daysSessions: Record<string, string>
   depositPaid: boolean
+  additionalContacts: { name: string; relationship: string; phone: string; email: string; isAuthorisedCollector: boolean }[]
+  medicationFormData: string
 }
 
 function buildInitialSessions(daysSessions: Record<string, string>): Record<string, string> {
@@ -52,16 +59,16 @@ export default function PromoteForm({
   const [lastName, setLastName] = useState(defaultValues.lastName)
   const [dateOfBirth, setDateOfBirth] = useState(defaultValues.dateOfBirth)
   const [keyWorkerId, setKeyWorkerId] = useState(defaultValues.keyWorkerId)
-  const [address, setAddress] = useState('')
-  const [collectionPassword, setCollectionPassword] = useState('')
-  const [hasAllergies, setHasAllergies] = useState(false)
-  const [allergies, setAllergies] = useState('')
-  const [medicalNotes, setMedicalNotes] = useState('')
+  const [address, setAddress] = useState(defaultValues.address)
+  const [collectionPassword, setCollectionPassword] = useState(defaultValues.collectionPassword)
+  const [hasAllergies, setHasAllergies] = useState(defaultValues.hasMedicalConditions)
+  const [allergies, setAllergies] = useState(defaultValues.medicalConditionsDetails)
+  const [medicalNotes, setMedicalNotes] = useState(defaultValues.medicalConditionsDetails)
   const [photoConsent, setPhotoConsent] = useState(false)
   const [consumableConsent, setConsumableConsent] = useState(false)
   const [needs1to1, setNeeds1to1] = useState(false)
   const [contactName, setContactName] = useState(defaultValues.contactName)
-  const [contactRelationship, setContactRelationship] = useState('Parent/Carer')
+  const [contactRelationship, setContactRelationship] = useState(defaultValues.contactRelationship || 'Parent/Carer')
   const [contactPhone, setContactPhone] = useState(defaultValues.contactPhone)
   const [contactEmail, setContactEmail] = useState(defaultValues.contactEmail)
   const [sessions, setSessions] = useState<Record<string, string>>(
@@ -110,6 +117,8 @@ export default function PromoteForm({
       contactRelationship,
       contactPhone,
       contactEmail: contactEmail || undefined,
+      additionalContacts: defaultValues.additionalContacts,
+      medicationFormData: defaultValues.medicationFormData || undefined,
     })
 
     router.push(`/children/${childId}`)
@@ -252,6 +261,18 @@ export default function PromoteForm({
           </div>
         </div>
         <p className="text-xs text-gray-400">Marked as authorised collector by default. You can add more contacts from the child profile after saving.</p>
+        {defaultValues.additionalContacts.length > 0 && (
+          <div className="pt-2 border-t border-gray-100">
+            <p className="text-xs font-medium text-gray-600 mb-1.5">Also added from the enrolment, on saving:</p>
+            <div className="flex flex-wrap gap-1.5">
+              {defaultValues.additionalContacts.map((c, i) => (
+                <span key={i} className="text-xs bg-blue-50 border border-blue-200 text-blue-700 rounded-full px-2.5 py-1">
+                  {c.name} ({c.relationship})
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Medical */}
@@ -265,6 +286,12 @@ export default function PromoteForm({
           <div className="ml-6">
             <label className="block text-xs text-gray-600 mb-1">Allergy details</label>
             <textarea value={allergies} onChange={e => setAllergies(e.target.value)} rows={2} className={inp} />
+          </div>
+        )}
+        {defaultValues.medicationFormData && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
+            <span>✓</span>
+            <span>A Prescribed Medicine form was completed at enrolment — will be added to Medications on saving.</span>
           </div>
         )}
         <div>

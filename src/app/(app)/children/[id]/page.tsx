@@ -2,7 +2,7 @@ import { db } from '@/lib/db'
 import {
   children, childSessions, emergencyContacts, medications,
   childNotes, accidentForms, registerEntries, terms, users, childSiblings, medicineAdministrations,
-  childHolidays, sessionSegments, sessionConfig,
+  childHolidays, sessionSegments, sessionConfig, enrolments, enrolmentPolicySignatures, policies,
 } from '@/lib/db/schema'
 import { eq, and, inArray } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
@@ -21,6 +21,7 @@ import MedicineAdminSection from './MedicineAdminSection'
 import FundingSection from './FundingSection'
 import ParentSection from './ParentSection'
 import AttendanceLogSection from './AttendanceLogSection'
+import DocumentsSection from './DocumentsSection'
 
 export default async function ChildProfilePage({
   params,
@@ -48,6 +49,7 @@ export default async function ChildProfilePage({
     medicineAdmins,
     holidays,
     allChildEntries,
+    linkedEnrolment,
   ] = await Promise.all([
     db.select().from(childSessions).where(eq(childSessions.childId, id)),
     db.select().from(emergencyContacts).where(eq(emergencyContacts.childId, id)),
@@ -81,7 +83,20 @@ export default async function ChildProfilePage({
       droppedBy: registerEntries.droppedBy,
       rule48h: registerEntries.rule48h,
     }).from(registerEntries).where(eq(registerEntries.childId, id)).orderBy(registerEntries.date),
+    db.select().from(enrolments).where(eq(enrolments.promotedChildId, id)).then(r => r[0] ?? null),
   ])
+
+  const signedPolicies = linkedEnrolment
+    ? await db.select({
+        policyName: policies.name,
+        parentPrintName: enrolmentPolicySignatures.parentPrintName,
+        parentSignature: enrolmentPolicySignatures.parentSignature,
+        parentSignedAt: enrolmentPolicySignatures.parentSignedAt,
+        notes: enrolmentPolicySignatures.notes,
+      }).from(enrolmentPolicySignatures)
+        .innerJoin(policies, eq(enrolmentPolicySignatures.policyId, policies.id))
+        .where(eq(enrolmentPolicySignatures.enrolmentId, linkedEnrolment.id))
+    : []
 
   const childSessionIds = childSessionsData.map(s => s.id)
   const [segments, sessionConfigs] = await Promise.all([
@@ -217,6 +232,11 @@ export default async function ChildProfilePage({
           child={{ firstName: child.firstName, lastName: child.lastName, dateOfBirth: child.dateOfBirth, address: child.address ?? null }}
         />
         <AttendanceLogSection entries={serialisedEntries} />
+        <DocumentsSection
+          childName={`${child.firstName} ${child.lastName}`}
+          enrolment={linkedEnrolment}
+          policies={signedPolicies}
+        />
 
         {!child.archived ? (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center justify-between">
