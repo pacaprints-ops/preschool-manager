@@ -78,13 +78,28 @@ const tiles = [
     bg: 'bg-orange-50',
     border: 'border-orange-100',
   },
+  {
+    href: '/admin/accident-log',
+    label: 'Accident Log',
+    description: 'Termly and yearly accident trends by location',
+    icon: (
+      <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+        <line x1="12" y1="9" x2="12" y2="13" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+      </svg>
+    ),
+    color: 'text-red-600',
+    bg: 'bg-red-50',
+    border: 'border-red-100',
+  },
 ]
 
 export default async function AdminHubPage() {
   const session = await auth()
   const isAdmin = session?.user?.role === 'admin'
 
-  const visibleTiles = isAdmin ? tiles : tiles.filter(t => t.href !== '/admin/invoicing')
+  const visibleTiles = isAdmin ? tiles : tiles.filter(t => t.href !== '/admin/invoicing' && t.href !== '/admin/accident-log')
 
   return (
     <div className="max-w-2xl">
