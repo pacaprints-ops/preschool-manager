@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { generateInvoices, markInvoicePaid, markInvoiceUnpaid, deleteInvoice, updateAdjustment, markLateFeePaid, markLateFeeUnpaid, deleteLateFee, waiveLateFee, sendInvoiceEmail, sendLateFeeEmail, sendOverdueReminders, markExtraSessionPaid, markExtraSessionUnpaid, deleteExtraSession, waiveExtraSession } from './actions'
+import { generateInvoices, markInvoicePaid, markInvoiceUnpaid, deleteInvoice, updateAdjustment, markLateFeePaid, markLateFeeUnpaid, deleteLateFee, waiveLateFee, sendInvoiceEmail, sendLateFeeEmail, sendOverdueReminders, markExtraSessionPaid, markExtraSessionUnpaid, deleteExtraSession, waiveExtraSession, applyConsumableWaiver } from './actions'
 
 type Term = { id: string; name: string; academicYear: string; weekCount: number }
 type ActiveChild = { id: string; firstName: string; lastName: string }
@@ -128,6 +128,28 @@ export default function InvoicingClient({
   const [sendingLateFeeId, setSendingLateFeeId] = useState<string | null>(null)
   const [sendingReminders, setSendingReminders] = useState(false)
   const [remindersSent, setRemindersSent] = useState<number | null>(null)
+  const [waiverDate, setWaiverDate] = useState('')
+  const [waiverMode, setWaiverMode] = useState<'everyone' | 'selected'>('everyone')
+  const [waiverChildIds, setWaiverChildIds] = useState<Set<string>>(new Set())
+  const [waiverReason, setWaiverReason] = useState('')
+  const [applyingWaiver, setApplyingWaiver] = useState(false)
+  const [waiverResult, setWaiverResult] = useState<{ affected: number; skippedNoInvoice: string[]; skippedNoConsent: string[] } | null>(null)
+
+  async function handleApplyWaiver() {
+    if (!selectedTerm || !waiverDate) return
+    if (waiverMode === 'selected' && waiverChildIds.size === 0) return
+    if (!confirm(`Apply a £3.50 consumable waiver for ${waiverDate} to ${waiverMode === 'everyone' ? 'everyone scheduled that day' : `${waiverChildIds.size} selected child${waiverChildIds.size !== 1 ? 'ren' : ''}`}?`)) return
+    setApplyingWaiver(true)
+    setWaiverResult(null)
+    const result = await applyConsumableWaiver(
+      selectedTerm,
+      waiverDate,
+      waiverMode === 'everyone' ? { mode: 'everyone' } : { mode: 'selected', childIds: [...waiverChildIds] },
+      waiverReason
+    )
+    setApplyingWaiver(false)
+    setWaiverResult(result)
+  }
 
   const termInvoices = invoices.filter(i => i.invoice.termId === selectedTerm)
   const totalDue = termInvoices.reduce((sum, i) => sum + parseFloat(i.invoice.amountDue), 0)
@@ -311,6 +333,80 @@ export default function InvoicingClient({
           })}
         </div>
       </div>
+
+      {/* Consumable fee waiver — ad hoc closure or optional-day exceptions */}
+      {selectedTerm && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-1">Consumable fee waiver</h3>
+          <p className="text-xs text-gray-500 mb-3">
+            Waive the £3.50 consumable fee for one date on {terms.find(t => t.id === selectedTerm)?.name}&apos;s invoices — e.g. an unplanned closure, or an optional day some children skip.
+          </p>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <input type="date" value={waiverDate} onChange={e => setWaiverDate(e.target.value)} className={input} />
+              <select value={waiverMode} onChange={e => setWaiverMode(e.target.value as 'everyone' | 'selected')} className={input}>
+                <option value="everyone">Everyone scheduled that day</option>
+                <option value="selected">Pick specific children</option>
+              </select>
+            </div>
+
+            {waiverMode === 'selected' && (
+              <div className="flex flex-wrap gap-2">
+                {activeChildren.map(child => {
+                  const checked = waiverChildIds.has(child.id)
+                  return (
+                    <button
+                      key={child.id}
+                      type="button"
+                      onClick={() => setWaiverChildIds(prev => {
+                        const next = new Set(prev)
+                        if (next.has(child.id)) next.delete(child.id)
+                        else next.add(child.id)
+                        return next
+                      })}
+                      className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
+                        checked
+                          ? 'bg-blue-800 text-white border-blue-800'
+                          : 'bg-white text-gray-600 border-gray-300 hover:border-blue-600'
+                      }`}
+                    >
+                      {child.firstName} {child.lastName}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            <input
+              type="text"
+              placeholder="Reason (optional) — e.g. staff training day, half the class in"
+              value={waiverReason}
+              onChange={e => setWaiverReason(e.target.value)}
+              className={`${input} w-full`}
+            />
+
+            <button
+              onClick={handleApplyWaiver}
+              disabled={applyingWaiver || !waiverDate || (waiverMode === 'selected' && waiverChildIds.size === 0)}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded-lg disabled:opacity-50"
+            >
+              {applyingWaiver ? 'Applying…' : 'Apply waiver'}
+            </button>
+
+            {waiverResult && (
+              <div className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <p className="text-green-700 font-medium">✓ Waived for {waiverResult.affected} invoice{waiverResult.affected !== 1 ? 's' : ''}.</p>
+                {waiverResult.skippedNoConsent.length > 0 && (
+                  <p className="mt-1">Skipped (no consumable consent): {waiverResult.skippedNoConsent.join(', ')}</p>
+                )}
+                {waiverResult.skippedNoInvoice.length > 0 && (
+                  <p className="mt-1">Skipped (no invoice generated for this term yet): {waiverResult.skippedNoInvoice.join(', ')}</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Child selection */}
       {selectedTerm && (

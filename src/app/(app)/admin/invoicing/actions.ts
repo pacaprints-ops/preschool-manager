@@ -182,6 +182,75 @@ export async function updateAdjustment(id: string, adjustmentAmount: string, adj
   revalidatePath('/admin/invoicing')
 }
 
+const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const
+
+// Waives one session's consumable fee (£3.50) for the given date, on top of
+// whatever adjustment already exists on each affected invoice. Scope 'everyone'
+// only touches children who actually have a session on that date's day of the
+// week — so a child who's swapped off that day is automatically skipped.
+export async function applyConsumableWaiver(
+  termId: string,
+  date: string,
+  scope: { mode: 'everyone' } | { mode: 'selected'; childIds: string[] },
+  reason: string
+): Promise<{ affected: number; skippedNoInvoice: string[]; skippedNoConsent: string[] }> {
+  const contribution = 3.50
+  const dayOfWeek = DAY_NAMES[new Date(date + 'T12:00:00').getDay()]
+
+  const termInvoices = await db
+    .select({ invoice: invoices, child: children })
+    .from(invoices)
+    .innerJoin(children, eq(invoices.childId, children.id))
+    .where(eq(invoices.termId, termId))
+
+  let candidateChildIds: string[]
+  let nameById = new Map<string, string>()
+  if (scope.mode === 'selected') {
+    candidateChildIds = scope.childIds
+    const rows = await db.select({ id: children.id, firstName: children.firstName, lastName: children.lastName })
+      .from(children).where(inArray(children.id, scope.childIds))
+    nameById = new Map(rows.map(c => [c.id, `${c.firstName} ${c.lastName}`]))
+  } else {
+    const sessionsOnDay = await db
+      .select({ childId: childSessions.childId })
+      .from(childSessions)
+      .where(eq(childSessions.day, dayOfWeek as 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday'))
+    candidateChildIds = [...new Set(sessionsOnDay.map(s => s.childId))]
+  }
+
+  const affectedNames: string[] = []
+  const skippedNoInvoice: string[] = []
+  const skippedNoConsent: string[] = []
+
+  for (const childId of candidateChildIds) {
+    const row = termInvoices.find(r => r.child.id === childId)
+    if (!row) {
+      if (scope.mode === 'selected') skippedNoInvoice.push(nameById.get(childId) ?? childId)
+      continue
+    }
+    const { invoice: inv, child } = row
+    if (!inv.consumableConsent) {
+      skippedNoConsent.push(`${child.firstName} ${child.lastName}`)
+      continue
+    }
+    const bankHolidayDeduction = (inv.bankHolidayCount ?? 0) * contribution
+    const base = parseFloat(inv.sessionCost) + parseFloat(inv.contributionTotal) - bankHolidayDeduction
+    const newAdjustment = parseFloat(inv.adjustmentAmount) - contribution
+    const noteLine = `−£3.50 consumable waived ${date}${reason ? ` — ${reason}` : ''}`
+    const newNote = [inv.adjustmentNote, noteLine].filter(Boolean).join('; ')
+    const amountDue = Math.max(0, base + newAdjustment).toFixed(2)
+    await db.update(invoices).set({
+      adjustmentAmount: newAdjustment.toFixed(2),
+      adjustmentNote: newNote,
+      amountDue,
+    }).where(eq(invoices.id, inv.id))
+    affectedNames.push(`${child.firstName} ${child.lastName}`)
+  }
+
+  revalidatePath('/admin/invoicing')
+  return { affected: affectedNames.length, skippedNoInvoice, skippedNoConsent }
+}
+
 export async function markInvoicePaid(id: string) {
   await db.update(invoices).set({ status: 'paid', paidAt: new Date() }).where(eq(invoices.id, id))
   revalidatePath('/admin/invoicing')
