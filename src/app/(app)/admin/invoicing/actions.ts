@@ -353,7 +353,7 @@ export async function sendInvoiceEmail(id: string, type: 'initial' | 'reminder' 
 }
 
 export async function sendOverdueReminders(termId: string): Promise<number> {
-  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
+  const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000
 
   // Fetch all 'sent' invoices for this term that have a parentEmail
   const sentInvoices = await db
@@ -382,10 +382,10 @@ export async function sendOverdueReminders(termId: string): Promise<number> {
     if (inv.sentAt) candidates.push(inv.sentAt)
     if (latestReminderAt) candidates.push(latestReminderAt)
 
-    // If never contacted, or last contact was 7+ days ago, send a reminder
+    // If never contacted, or last contact was 3+ days ago, send a reminder
     if (
       candidates.length === 0 ||
-      Math.max(...candidates.map(d => d.getTime())) <= now.getTime() - SEVEN_DAYS_MS
+      Math.max(...candidates.map(d => d.getTime())) <= now.getTime() - THREE_DAYS_MS
     ) {
       await sendInvoiceEmail(inv.id, 'reminder')
       count++

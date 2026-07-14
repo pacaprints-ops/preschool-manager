@@ -113,9 +113,11 @@ export default function InvoicingClient({
 }) {
   const [selectedTerm, setSelectedTerm] = useState<string>(terms[terms.length - 1]?.id ?? '')
   const [generating, setGenerating] = useState(false)
-  const [selectedChildIds, setSelectedChildIds] = useState<Set<string>>(
-    new Set(activeChildren.map(c => c.id))
-  )
+  const [invoiceMode, setInvoiceMode] = useState<'all' | 'specific'>('all')
+  const [invoiceSpecificChildId, setInvoiceSpecificChildId] = useState<string>('')
+  const selectedChildIds = invoiceMode === 'all'
+    ? new Set(activeChildren.map(c => c.id))
+    : new Set(invoiceSpecificChildId ? [invoiceSpecificChildId] : [])
   const [editingAdjustment, setEditingAdjustment] = useState<string | null>(null)
   const [adjAmount, setAdjAmount] = useState('')
   const [adjNote, setAdjNote] = useState('')
@@ -134,6 +136,8 @@ export default function InvoicingClient({
   const [waiverReason, setWaiverReason] = useState('')
   const [applyingWaiver, setApplyingWaiver] = useState(false)
   const [waiverResult, setWaiverResult] = useState<{ affected: number; skippedNoInvoice: string[]; skippedNoConsent: string[] } | null>(null)
+  const [lateFeesOpen, setLateFeesOpen] = useState(false)
+  const unpaidLateFeesCount = lateFees.filter(f => f.fee.status === 'unpaid').length
 
   async function handleApplyWaiver() {
     if (!selectedTerm || !waiverDate) return
@@ -164,22 +168,7 @@ export default function InvoicingClient({
   const totalPaid = termInvoices.filter(i => i.invoice.status === 'paid').reduce((sum, i) => sum + parseFloat(i.invoice.amountDue), 0)
   const outstanding = termInvoices.filter(i => i.invoice.status !== 'paid').length
 
-  const allSelected = activeChildren.length > 0 && selectedChildIds.size === activeChildren.length
   const noneSelected = selectedChildIds.size === 0
-
-  function toggleChild(id: string) {
-    setSelectedChildIds(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  function toggleAll() {
-    if (allSelected) setSelectedChildIds(new Set())
-    else setSelectedChildIds(new Set(activeChildren.map(c => c.id)))
-  }
 
   async function handleGenerate() {
     if (!selectedTerm || noneSelected) return
@@ -278,7 +267,12 @@ export default function InvoicingClient({
   return (
     <div className="space-y-4">
 
-      {/* ── Term & invoices ─────────────────────────────────────────────── */}
+      {/* ── 1. Term & invoices ──────────────────────────────────────────── */}
+
+      {/* Guide */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-900">
+        <strong>Order of operations:</strong> pick a term and generate invoices first — the consumable fee waiver and reminders below only work on invoices that already exist.
+      </div>
 
       {/* Term selector + generate */}
       <div className="flex items-center gap-3 flex-wrap">
@@ -295,166 +289,50 @@ export default function InvoicingClient({
         </button>
       </div>
 
-      {/* Invoice log — bulk PDF download by term or whole academic year */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <h3 className="text-sm font-semibold text-gray-700 mb-1">Invoice log</h3>
-        <p className="text-xs text-gray-500 mb-3">Download every generated invoice for a term, or a whole school year, as one PDF.</p>
-        <div className="flex flex-wrap gap-2">
-          <a
-            href={selectedTerm ? `/api/invoice/bulk/pdf?termId=${selectedTerm}` : undefined}
-            target="_blank"
-            rel="noreferrer"
-            aria-disabled={!selectedTerm || termInvoices.length === 0}
-            className={`text-xs px-3 py-2 rounded-lg border font-medium transition-colors ${
-              selectedTerm && termInvoices.length > 0
-                ? 'text-blue-700 border-blue-200 hover:bg-blue-50'
-                : 'text-gray-300 border-gray-200 pointer-events-none'
-            }`}
-          >
-            📥 Download {terms.find(t => t.id === selectedTerm)?.name ?? 'selected term'} ({termInvoices.length} invoice{termInvoices.length !== 1 ? 's' : ''})
-          </a>
-          {[...new Set(terms.map(t => t.academicYear))].map(year => {
-            const count = invoices.filter(i => terms.find(t => t.id === i.invoice.termId)?.academicYear === year).length
-            return (
-              <a
-                key={year}
-                href={count > 0 ? `/api/invoice/bulk/pdf?academicYear=${encodeURIComponent(year)}` : undefined}
-                target="_blank"
-                rel="noreferrer"
-                className={`text-xs px-3 py-2 rounded-lg border font-medium transition-colors ${
-                  count > 0
-                    ? 'text-blue-700 border-blue-200 hover:bg-blue-50'
-                    : 'text-gray-300 border-gray-200 pointer-events-none'
-                }`}
-              >
-                📥 Download whole {year} year ({count} invoice{count !== 1 ? 's' : ''})
-              </a>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Consumable fee waiver — ad hoc closure or optional-day exceptions */}
-      {selectedTerm && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-1">Consumable fee waiver</h3>
-          <p className="text-xs text-gray-500 mb-3">
-            Waive the £3.50 consumable fee for one date on {terms.find(t => t.id === selectedTerm)?.name}&apos;s invoices — e.g. an unplanned closure, or an optional day some children skip.
-          </p>
-          <div className="space-y-3">
-            <div className="flex items-center gap-3 flex-wrap">
-              <input type="date" value={waiverDate} onChange={e => setWaiverDate(e.target.value)} className={input} />
-              <select value={waiverMode} onChange={e => setWaiverMode(e.target.value as 'everyone' | 'selected')} className={input}>
-                <option value="everyone">Everyone scheduled that day</option>
-                <option value="selected">Pick specific children</option>
-              </select>
-            </div>
-
-            {waiverMode === 'selected' && (
-              <div className="flex flex-wrap gap-2">
-                {activeChildren.map(child => {
-                  const checked = waiverChildIds.has(child.id)
-                  return (
-                    <button
-                      key={child.id}
-                      type="button"
-                      onClick={() => setWaiverChildIds(prev => {
-                        const next = new Set(prev)
-                        if (next.has(child.id)) next.delete(child.id)
-                        else next.add(child.id)
-                        return next
-                      })}
-                      className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
-                        checked
-                          ? 'bg-blue-800 text-white border-blue-800'
-                          : 'bg-white text-gray-600 border-gray-300 hover:border-blue-600'
-                      }`}
-                    >
-                      {child.firstName} {child.lastName}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-
-            <input
-              type="text"
-              placeholder="Reason (optional) — e.g. staff training day, half the class in"
-              value={waiverReason}
-              onChange={e => setWaiverReason(e.target.value)}
-              className={`${input} w-full`}
-            />
-
-            <button
-              onClick={handleApplyWaiver}
-              disabled={applyingWaiver || !waiverDate || (waiverMode === 'selected' && waiverChildIds.size === 0)}
-              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded-lg disabled:opacity-50"
-            >
-              {applyingWaiver ? 'Applying…' : 'Apply waiver'}
-            </button>
-
-            {waiverResult && (
-              <div className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-3">
-                {waiverResult.affected > 0 ? (
-                  <p className="text-green-700 font-medium">✓ Waived for {waiverResult.affected} invoice{waiverResult.affected !== 1 ? 's' : ''}.</p>
-                ) : (
-                  <p className="text-amber-700 font-medium">Nothing was waived.</p>
-                )}
-                {waiverResult.skippedNoConsent.length > 0 && (
-                  <p className="mt-1">Skipped (no consumable consent): {waiverResult.skippedNoConsent.join(', ')}</p>
-                )}
-                {waiverResult.skippedNoInvoice.length > 0 && (
-                  <p className="mt-1">Skipped — no invoice generated for this term yet: {waiverResult.skippedNoInvoice.join(', ')}. Generate invoices for this term first, then apply the waiver.</p>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Child selection */}
-      {selectedTerm && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-gray-700">
-              Select children to invoice
-              <span className="ml-2 text-xs font-normal text-gray-400">
-                {selectedChildIds.size} of {activeChildren.length} selected
-              </span>
-            </h3>
-            <button onClick={toggleAll} className="text-xs text-blue-800 hover:text-blue-900 font-medium">
-              {allSelected ? 'Deselect all' : 'Select all'}
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {activeChildren.map(child => {
-              const checked = selectedChildIds.has(child.id)
-              return (
-                <button key={child.id} type="button" onClick={() => toggleChild(child.id)}
-                  className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
-                    checked
-                      ? 'bg-blue-800 text-white border-blue-800'
-                      : 'bg-white text-gray-600 border-gray-300 hover:border-blue-600'
-                  }`}
-                >
-                  {child.firstName} {child.lastName}
-                </button>
-              )
-            })}
-            {activeChildren.length === 0 && (
-              <p className="text-sm text-gray-400">No active children found.</p>
-            )}
-          </div>
-        </div>
-      )}
-
       {terms.length === 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900">
           No terms set up yet. Go to <strong>Term Dates</strong> to add your first term.
         </div>
       )}
 
-      {/* Stats + funding claims + invoice table for the selected term */}
+      {/* ── 2. Select children to invoice ────────────────────────────────── */}
+      {selectedTerm && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">
+            Select children to invoice
+            <span className="ml-2 text-xs font-normal text-gray-400">
+              {selectedChildIds.size} of {activeChildren.length} selected
+            </span>
+          </h3>
+          <div className="flex items-center gap-3 flex-wrap">
+            <select
+              value={invoiceMode}
+              onChange={e => { setInvoiceMode(e.target.value as 'all' | 'specific'); setInvoiceSpecificChildId('') }}
+              className={input}
+            >
+              <option value="all">All children</option>
+              <option value="specific">Specific child</option>
+            </select>
+            {invoiceMode === 'specific' && (
+              <select
+                value={invoiceSpecificChildId}
+                onChange={e => setInvoiceSpecificChildId(e.target.value)}
+                className={input}
+              >
+                <option value="">— Select child —</option>
+                {activeChildren.map(child => (
+                  <option key={child.id} value={child.id}>{child.firstName} {child.lastName}</option>
+                ))}
+              </select>
+            )}
+          </div>
+          {activeChildren.length === 0 && (
+            <p className="text-sm text-gray-400 mt-2">No active children found.</p>
+          )}
+        </div>
+      )}
+
+      {/* ── 3. Stats + funding claims + invoice table for the selected term ── */}
       {termInvoices.length > 0 && (
         <>
           <div className="grid grid-cols-3 gap-3">
@@ -472,14 +350,14 @@ export default function InvoicingClient({
             </div>
           </div>
 
-          {/* 7-day reminder button */}
+          {/* 3-day reminder button */}
           <div className="flex items-center gap-3">
             <button
               onClick={handleSendReminders}
               disabled={sendingReminders}
               className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:border-gray-400 hover:bg-gray-50 disabled:opacity-50"
             >
-              {sendingReminders ? 'Sending…' : 'Send 7-day reminders'}
+              {sendingReminders ? 'Sending…' : 'Send 3-day reminders'}
             </button>
             {remindersSent !== null && (
               <span className="text-sm text-green-600">{remindersSent} reminder{remindersSent !== 1 ? 's' : ''} sent</span>
@@ -700,42 +578,112 @@ export default function InvoicingClient({
         </div>
       )}
 
-      {/* ── Across all terms ────────────────────────────────────────────── */}
-      {unpaidChildren.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 mt-2">Across all terms</p>
-          <div className="bg-amber-50 border border-amber-300 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-amber-800">Outstanding balances</h3>
-              <span className="text-sm font-bold text-amber-900">£{totalOutstanding.toFixed(2)} total</span>
+      {/* ── 4. Consumable fee waiver ─────────────────────────────────────── */}
+      {selectedTerm && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-1">Consumable fee waiver</h3>
+          <p className="text-xs text-gray-500 mb-3">
+            Waive the £3.50 consumable fee for one date on {terms.find(t => t.id === selectedTerm)?.name}&apos;s invoices — e.g. an unplanned closure, or an optional day some children skip.
+            {termInvoices.length === 0 && (
+              <span className="block mt-1.5 font-medium text-amber-700">⚠ No invoices generated for this term yet — generate them above first, or this won&apos;t find anything to waive.</span>
+            )}
+          </p>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <input type="date" value={waiverDate} onChange={e => setWaiverDate(e.target.value)} className={input} />
+              <select value={waiverMode} onChange={e => setWaiverMode(e.target.value as 'everyone' | 'selected')} className={input}>
+                <option value="everyone">Everyone scheduled that day</option>
+                <option value="selected">Pick specific children</option>
+              </select>
             </div>
-            <div className="space-y-1.5">
-              {unpaidChildren.map(({ child, total, terms: termNames }) => (
-                <div key={child.id} className="flex items-center justify-between text-sm">
-                  <div>
-                    <span className="font-medium text-gray-900">{child.firstName} {child.lastName}</span>
-                    <span className="text-xs text-gray-500 ml-2">{termNames.join(', ')}</span>
-                  </div>
-                  <span className="font-semibold text-amber-800">£{total.toFixed(2)}</span>
-                </div>
-              ))}
-            </div>
+
+            {waiverMode === 'selected' && (
+              <div className="flex flex-wrap gap-2">
+                {activeChildren.map(child => {
+                  const checked = waiverChildIds.has(child.id)
+                  return (
+                    <button
+                      key={child.id}
+                      type="button"
+                      onClick={() => setWaiverChildIds(prev => {
+                        const next = new Set(prev)
+                        if (next.has(child.id)) next.delete(child.id)
+                        else next.add(child.id)
+                        return next
+                      })}
+                      className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
+                        checked
+                          ? 'bg-blue-800 text-white border-blue-800'
+                          : 'bg-white text-gray-600 border-gray-300 hover:border-blue-600'
+                      }`}
+                    >
+                      {child.firstName} {child.lastName}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            <input
+              type="text"
+              placeholder="Reason (optional) — e.g. staff training day, half the class in"
+              value={waiverReason}
+              onChange={e => setWaiverReason(e.target.value)}
+              className={`${input} w-full`}
+            />
+
+            <button
+              onClick={handleApplyWaiver}
+              disabled={applyingWaiver || !waiverDate || (waiverMode === 'selected' && waiverChildIds.size === 0)}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded-lg disabled:opacity-50"
+            >
+              {applyingWaiver ? 'Applying…' : 'Apply waiver'}
+            </button>
+
+            {waiverResult && (
+              <div className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                {waiverResult.affected > 0 ? (
+                  <p className="text-green-700 font-medium">✓ Waived for {waiverResult.affected} invoice{waiverResult.affected !== 1 ? 's' : ''}.</p>
+                ) : (
+                  <p className="text-amber-700 font-medium">Nothing was waived.</p>
+                )}
+                {waiverResult.skippedNoConsent.length > 0 && (
+                  <p className="mt-1">Skipped (no consumable consent): {waiverResult.skippedNoConsent.join(', ')}</p>
+                )}
+                {waiverResult.skippedNoInvoice.length > 0 && (
+                  <p className="mt-1">Skipped — no invoice generated for this term yet: {waiverResult.skippedNoInvoice.join(', ')}. Generate invoices for this term first, then apply the waiver.</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* ── Other charges (not term invoices) ───────────────────────────── */}
+      {/* ── 5. Late pickup fees + Extra one-off sessions (separate from term invoices) ── */}
       {(lateFees.length > 0 || extraSessions.length > 0) && (
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 mt-2">Other charges</p>
       )}
 
-      {/* Late pickup fees */}
+      {/* Late pickup fees — separate from term invoices; collapsible since it can get long */}
       {lateFees.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-700">Late pickup fees</h3>
-            <span className="text-xs text-gray-400">{lateFees.filter(f => f.fee.status === 'unpaid').length} unpaid</span>
-          </div>
+          <button
+            type="button"
+            onClick={() => setLateFeesOpen(o => !o)}
+            className="w-full px-4 py-3 border-b border-gray-100 flex items-center justify-between text-left hover:bg-gray-50"
+          >
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-gray-700">Late pickup fees</h3>
+              <span className="text-xs text-gray-400">separate from term invoices</span>
+              {unpaidLateFeesCount > 0 && (
+                <span className="text-xs font-semibold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                  {unpaidLateFeesCount} to send
+                </span>
+              )}
+            </div>
+            <span className={`text-gray-400 transition-transform ${lateFeesOpen ? 'rotate-180' : ''}`}>▾</span>
+          </button>
+          {lateFeesOpen && (
           <div className="divide-y divide-gray-100">
             {lateFees.map(({ fee, child }) => (
               <div key={fee.id} className={`px-4 py-3 ${fee.status !== 'unpaid' ? 'opacity-60' : ''}`}>
@@ -818,6 +766,7 @@ export default function InvoicingClient({
               </div>
             ))}
           </div>
+          )}
         </div>
       )}
 
@@ -900,6 +849,69 @@ export default function InvoicingClient({
           </div>
         </div>
       )}
+
+      {/* ── 6. Outstanding balances — across all terms ──────────────────── */}
+      {unpaidChildren.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 mt-2">Across all terms</p>
+          <div className="bg-amber-50 border border-amber-300 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-amber-800">Outstanding balances</h3>
+              <span className="text-sm font-bold text-amber-900">£{totalOutstanding.toFixed(2)} total</span>
+            </div>
+            <div className="space-y-1.5">
+              {unpaidChildren.map(({ child, total, terms: termNames }) => (
+                <div key={child.id} className="flex items-center justify-between text-sm">
+                  <div>
+                    <span className="font-medium text-gray-900">{child.firstName} {child.lastName}</span>
+                    <span className="text-xs text-gray-500 ml-2">{termNames.join(', ')}</span>
+                  </div>
+                  <span className="font-semibold text-amber-800">£{total.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 7. Invoice log — bulk PDF download by term or whole academic year ── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <h3 className="text-sm font-semibold text-gray-700 mb-1">Invoice log</h3>
+        <p className="text-xs text-gray-500 mb-3">Download every generated invoice for a term, or a whole school year, as one PDF.</p>
+        <div className="flex flex-wrap gap-2">
+          <a
+            href={selectedTerm ? `/api/invoice/bulk/pdf?termId=${selectedTerm}` : undefined}
+            target="_blank"
+            rel="noreferrer"
+            aria-disabled={!selectedTerm || termInvoices.length === 0}
+            className={`text-xs px-3 py-2 rounded-lg border font-medium transition-colors ${
+              selectedTerm && termInvoices.length > 0
+                ? 'text-blue-700 border-blue-200 hover:bg-blue-50'
+                : 'text-gray-300 border-gray-200 pointer-events-none'
+            }`}
+          >
+            📥 Download {terms.find(t => t.id === selectedTerm)?.name ?? 'selected term'} ({termInvoices.length} invoice{termInvoices.length !== 1 ? 's' : ''})
+          </a>
+          {[...new Set(terms.map(t => t.academicYear))].map(year => {
+            const count = invoices.filter(i => terms.find(t => t.id === i.invoice.termId)?.academicYear === year).length
+            return (
+              <a
+                key={year}
+                href={count > 0 ? `/api/invoice/bulk/pdf?academicYear=${encodeURIComponent(year)}` : undefined}
+                target="_blank"
+                rel="noreferrer"
+                className={`text-xs px-3 py-2 rounded-lg border font-medium transition-colors ${
+                  count > 0
+                    ? 'text-blue-700 border-blue-200 hover:bg-blue-50'
+                    : 'text-gray-300 border-gray-200 pointer-events-none'
+                }`}
+              >
+                📥 Download whole {year} year ({count} invoice{count !== 1 ? 's' : ''})
+              </a>
+            )
+          })}
+        </div>
+      </div>
 
     </div>
   )
