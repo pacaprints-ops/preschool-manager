@@ -489,6 +489,27 @@ export default function AccidentsSection({
         <p className="text-sm text-gray-400">No accident forms recorded.</p>
       )}
 
+      {accidents.length > 0 && (
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          <div className="bg-gray-50 rounded-lg border border-gray-200 p-2.5 text-center">
+            <div className="text-lg font-bold text-gray-800">{accidents.length}</div>
+            <div className="text-[11px] text-gray-500 mt-0.5">Total accidents</div>
+          </div>
+          <div className="bg-gray-50 rounded-lg border border-gray-200 p-2.5 text-center">
+            <div className="text-lg font-bold text-gray-800">
+              {accidents.filter(({ form }) => form.incidentType !== 'out_of_setting').length}
+            </div>
+            <div className="text-[11px] text-gray-500 mt-0.5">In setting</div>
+          </div>
+          <div className="bg-gray-50 rounded-lg border border-gray-200 p-2.5 text-center">
+            <div className="text-lg font-bold text-gray-800">
+              {accidents.filter(({ form }) => form.incidentType === 'out_of_setting').length}
+            </div>
+            <div className="text-[11px] text-gray-500 mt-0.5">Out of setting</div>
+          </div>
+        </div>
+      )}
+
       {/* Accident log */}
       <div className="space-y-2">
         {accidents.map(({ form: a, reporterName }) => {
