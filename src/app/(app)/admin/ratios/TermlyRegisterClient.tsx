@@ -5,7 +5,10 @@ import { updateChildFundingFlag } from '@/app/(app)/children/actions'
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const
 const DAY_LABEL: Record<string, string> = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri' }
+const DAY_LABEL_FULL: Record<string, string> = { monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday', friday: 'Friday' }
 const SESSION_HOURS: Record<string, number> = { morning: 3, afternoon: 3, full_day: 6 }
+// Fixed daily capacity — confirmed with Carrie, same every day, no per-term config needed
+const MAX_DAILY_CAPACITY = 30
 
 type Session = { day: string; sessionType: string }
 
@@ -106,7 +109,9 @@ export default function TermlyRegisterClient({
     const count34yrGen = gen.filter(c => c.ageAtTerm >= 3).length
     const count1to1 = attending.filter(c => c.needs1to1).length
     const staffInRatio = Math.ceil(count2yrGen / 4) + Math.ceil(count34yrGen / 8)
-    return { total: attending.length, count2yr, staffInRatio, count1to1, totalStaff: staffInRatio + count1to1 }
+    const totalStaff = staffInRatio + count1to1
+    const spacesAvailable = MAX_DAILY_CAPACITY - attending.length
+    return { total: attending.length, count2yr, staffInRatio, count1to1, totalStaff, spacesAvailable }
   })
 
   async function toggleFlag(childId: string, field: 'dep' | 'eypp' | 'sen') {
@@ -162,6 +167,34 @@ export default function TermlyRegisterClient({
           </button>
         </div>
       </div>
+
+      {/* Day-at-a-glance summary — quick skim of kids/staff/spaces per day */}
+      {terms.length > 0 && (
+        <div className="print:hidden grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
+          {DAYS.map((day, i) => {
+            const s = dayStats[i]
+            const spacesCls = s.spacesAvailable <= 0 ? 'text-red-600' : s.spacesAvailable <= 5 ? 'text-amber-600' : 'text-green-600'
+            const spacesLabel = s.spacesAvailable < 0 ? `Over by ${Math.abs(s.spacesAvailable)}` : s.spacesAvailable === 0 ? 'Full' : s.spacesAvailable
+            return (
+              <div key={day} className="bg-white rounded-xl border border-gray-200 p-3">
+                <div className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">{DAY_LABEL_FULL[day]}</div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500">Children</span>
+                  <span className="font-bold text-gray-900 text-base">{s.total}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm mt-1">
+                  <span className="text-gray-500">Staff needed</span>
+                  <span className="font-bold text-gray-900 text-base">{s.totalStaff}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm mt-1.5 pt-1.5 border-t border-gray-100">
+                  <span className="text-gray-500">Spaces left</span>
+                  <span className={`font-bold text-base ${spacesCls}`}>{spacesLabel}</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* Print-only header */}
       <div className="hidden print:flex justify-between items-baseline mb-3">
@@ -278,19 +311,27 @@ export default function TermlyRegisterClient({
               {/* Footer rows */}
               {[
                 { label: 'Total children attending', hint: 'All children booked in that day', values: dayStats.map(s => s.total), cls: 'font-bold text-gray-800' },
+                {
+                  label: 'Spaces available',
+                  hint: `Based on a maximum of ${MAX_DAILY_CAPACITY} children per day`,
+                  values: dayStats.map(s => s.spacesAvailable),
+                  cls: 'font-bold',
+                  colorCls: (v: number) => v <= 0 ? 'text-red-600' : v <= 5 ? 'text-amber-600' : 'text-green-600',
+                  format: (v: number) => v < 0 ? `Over by ${Math.abs(v)}` : v === 0 ? 'Full' : v,
+                },
                 { label: '— of which, 2 year olds', hint: 'Counted at 1 staff : 4 children', values: dayStats.map(s => s.count2yr), cls: 'text-blue-700 font-medium' },
                 { label: 'Staff required (ratio)', hint: 'Minimum staff needed to meet EYFS ratios', values: dayStats.map(s => s.staffInRatio), cls: 'text-gray-700 font-medium' },
                 { label: '+ 1-2-1 support staff', hint: 'Dedicated keyworkers, on top of ratio', values: dayStats.map(s => s.count1to1), cls: 'text-purple-700 font-medium' },
                 { label: '= Total staff needed', hint: 'Ratio staff plus 1-2-1 support', values: dayStats.map(s => s.totalStaff), cls: 'font-bold text-gray-900' },
               ].map((row, rowIndex) => (
-                <tr key={row.label} className={`border-t border-gray-100 ${rowIndex === 4 ? 'bg-blue-50/50 border-t-2 border-t-blue-200' : 'bg-gray-50'}`}>
+                <tr key={row.label} className={`border-t border-gray-100 ${rowIndex === 5 ? 'bg-blue-50/50 border-t-2 border-t-blue-200' : 'bg-gray-50'}`}>
                   <td colSpan={5} className="px-3 py-1.5 text-xs">
                     <span className="font-semibold text-gray-700">{row.label}</span>
                     <span className="hidden lg:inline text-gray-400 font-normal ml-1.5">— {row.hint}</span>
                   </td>
                   {row.values.map((v, dayIndex) => (
-                    <td key={dayIndex} className={`px-1 py-1.5 text-center text-xs border-r border-gray-200 ${row.cls}`}>
-                      {v > 0 ? v : <span className="text-gray-300">—</span>}
+                    <td key={dayIndex} className={`px-1 py-1.5 text-center text-xs border-r border-gray-200 ${row.colorCls ? row.colorCls(v) : row.cls}`}>
+                      {row.format ? row.format(v) : (v > 0 ? v : <span className="text-gray-300">—</span>)}
                     </td>
                   ))}
                   <td />
